@@ -1,0 +1,1 @@
+import{p as e}from"./button-Dn5dU6o-.js";import{t}from"./LoadDetails-BwjC_u7n.js";var n=e();function r(){return(0,n.jsx)(t,{})}export{r as default};

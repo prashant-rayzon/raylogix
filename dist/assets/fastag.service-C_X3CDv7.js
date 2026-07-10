@@ -1,0 +1,1 @@
+import{a as e}from"./button-Dn5dU6o-.js";var t={async getVehicleTracking(t){return(await e.post(`/api/tracking/fastag`,{vehicleNumber:t})).data}};export{t};

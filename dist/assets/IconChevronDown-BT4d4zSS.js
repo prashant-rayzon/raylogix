@@ -1,0 +1,1 @@
+import{i as e}from"./button-Dn5dU6o-.js";var t=e(`outline`,`chevron-down`,`IconChevronDown`,[[`path`,{d:`M6 9l6 6l6 -6`,key:`svg-0`}]]);export{t};

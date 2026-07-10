@@ -1,8 +1,0 @@
-import RoleBasedDashboard from './role-based-dashboard'
-
-export default function Dashboard() {
-  return <RoleBasedDashboard />
-}
-
-
-

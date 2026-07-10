@@ -1,0 +1,1 @@
+import{u as e}from"./format-BgRfpkhv.js";function t(t){return e(t,Date.now())}export{t};
