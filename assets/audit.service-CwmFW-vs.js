@@ -1,1 +1,0 @@
-import{a as e}from"./button-Dn5dU6o-.js";var t={async list(t){return(await e.get(`/api/audit`,{params:t})).data}};export{t};

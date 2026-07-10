@@ -1,1 +1,0 @@
-import{bt as e,c as t,l as n}from"./index-SyVlrNYY.js";var r=t=>n(e(e=>e.auth.user),t),i=n=>t(e(e=>e.auth.user),n);export{r as n,i as t};

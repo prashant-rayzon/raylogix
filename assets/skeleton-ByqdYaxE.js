@@ -1,1 +1,0 @@
-import{c as e,p as t}from"./button-Dn5dU6o-.js";import{l as n}from"./format-BgRfpkhv.js";function r(e,t){let r=n(e,t?.in);return r.setHours(23,59,59,999),r}var i=t();function a({className:t,...n}){return(0,i.jsx)(`div`,{className:e(`animate-pulse rounded-md bg-muted`,t),...n})}export{r as n,a as t};

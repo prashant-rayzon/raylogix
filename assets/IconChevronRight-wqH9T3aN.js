@@ -1,1 +1,0 @@
-import{i as e}from"./button-Dn5dU6o-.js";var t=e(`outline`,`chevron-left`,`IconChevronLeft`,[[`path`,{d:`M15 6l-6 6l6 6`,key:`svg-0`}]]),n=e(`outline`,`chevron-right`,`IconChevronRight`,[[`path`,{d:`M9 6l6 6l-6 6`,key:`svg-0`}]]);export{t as n,n as t};
