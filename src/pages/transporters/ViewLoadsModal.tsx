@@ -15,7 +15,6 @@ interface Load {
   pickupDate: string;
   deliveryDate: string;
   bidWinningPrice?: number;
-  priority?: string;
 }
 
 interface ViewLoadsModalProps {
@@ -31,6 +30,14 @@ const statusColors = {
   in_transit: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400 border-amber-200 dark:border-amber-800/50',
   delivered: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/50',
   canceled: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-400 border-red-200 dark:border-red-800/50',
+};
+
+const loadStatusLabels: Record<Load['status'], string> = {
+  open: 'Open',
+  assigned: 'Allocated',
+  in_transit: 'In Transit',
+  delivered: 'Delivered',
+  canceled: 'Cancelled',
 };
 
 export function ViewLoadsModal({ isOpen, transporterId, transporterName = 'Transporter', onClose }: ViewLoadsModalProps) {
@@ -136,7 +143,7 @@ export function ViewLoadsModal({ isOpen, transporterId, transporterName = 'Trans
             <div>
               <h2 className="text-lg font-semibold text-foreground">Assigned Loads</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                {transporterName} · assigned, in transit and delivered only
+                {transporterName} · allocated, in transit and delivered loads
               </p>
             </div>
             <button
@@ -171,7 +178,7 @@ export function ViewLoadsModal({ isOpen, transporterId, transporterName = 'Trans
                           statusColors[load.status] || statusColors.open
                         }`}
                       >
-                        {load.status.replace('_', ' ').charAt(0).toUpperCase() + load.status.replace('_', ' ').slice(1)}
+                        {loadStatusLabels[load.status] || load.status}
                       </span>
                     </div>
 
@@ -215,11 +222,6 @@ export function ViewLoadsModal({ isOpen, transporterId, transporterName = 'Trans
                             {load.numberOfVehicles || 1} vehicle{(load.numberOfVehicles || 1) === 1 ? '' : 's'}
                           </span>
                         </div>
-                        {load.priority && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-muted text-foreground">
-                            {load.priority}
-                          </span>
-                        )}
                       </div>
                       {load.bidWinningPrice && (
                         <div className="flex items-center gap-1.5">

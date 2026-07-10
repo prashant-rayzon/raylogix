@@ -24,6 +24,7 @@ export type Load = {
   quantity?: { amount?: number; unit?: string }
   vehicleType?: string
   numberOfVehicles?: number
+  estimatedWeight?: number
   allocatedVehicles?: number
   remainingVehicles?: number
   pickupDate: string
@@ -53,6 +54,12 @@ export type Load = {
     ceilingPrice?: number
     currency?: string
   }
+  routeData?: {
+    distanceKm?: number
+    durationHours?: number
+    routeSummary?: string
+    calculatedAt?: string
+  }
   allocations?: Array<{
     transporterId?: string | {
       _id?: string
@@ -75,6 +82,10 @@ export type Load = {
     allocatedVehicles?: number
     acceptedVehicles?: number
     finalRate?: number
+    offerRate?: number
+    offlineRate?: number
+    specialOfferRate?: number
+    finalConfirmedRate?: number
     rateType?: 'per_vehicle' | 'total'
     currency?: string
     status?: string
@@ -91,12 +102,37 @@ export type Load = {
     highestBid?: number
     averageBid?: number
   }
+  boardBids?: Bid[]
   actualPickupDate?: string
   actualDeliveryDate?: string
   deliveryProof?: string
-  specialRequirements?: string
+  deliveryConfirmation?: {
+    status?: 'pending' | 'proof_submitted' | 'confirmed' | 'rejected'
+    proofSubmittedAt?: string
+    proofSubmittedBy?: string
+    confirmedAt?: string
+    confirmedBy?: string
+    receiverName?: string
+    receiverPhone?: string
+    remarks?: string
+    proofs?: Array<{
+      url?: string
+      label?: string
+      uploadedAt?: string
+    }>
+  }
   notes?: string
   refNumber?: string
+  tat?: string
+  dpNum?: string
+  attachments?: Array<{
+    url?: string
+    name?: string
+    mimeType?: string
+    size?: number
+    uploadedAt?: string
+  }>
+  priceDeviation?: any
   createdAt?: string
   updatedAt?: string
   createdBy?: string | { _id?: string; email?: string; firstName?: string; lastName?: string }
@@ -118,6 +154,7 @@ export type Bid = {
     profilePicture?: string
   }
   bidAmount: number
+  originalBidAmount?: number
   currency?: string
   vehiclesOffered?: number
   allocatedVehicles?: number
@@ -125,6 +162,15 @@ export type Bid = {
     rateType?: 'per_vehicle' | 'total'
     floorPrice?: number
     ceilingPrice?: number
+  }
+  rateDetails?: {
+    offerRate?: number
+    offlineRate?: number
+    specialOfferRate?: number
+    finalConfirmedRate?: number
+    offlineRateSource?: string
+    offlineRateNotes?: string
+    updatedAt?: string
   }
   status: 'pending' | 'accepted' | 'rejected' | 'withdrawn' | 'expired'
   estimatedDeliveryDate: string
@@ -152,11 +198,20 @@ export async function listLoads(params: {
   page?: number
   limit?: number
   status?: LoadStatus
+  material?: string
   priority?: string
   sortBy?: string
   search?: string
+  vehicleType?: string
+  loadDirection?: 'outbound' | 'inbound'
+  isPublic?: 'true' | 'false'
+  pickupCity?: string
+  deliveryCity?: string
+  dateField?: 'pickupDate' | 'deliveryDate' | 'createdAt'
+  dateFrom?: string
+  dateTo?: string
 }): Promise<PaginationResponse<Load>> {
-  const res = await api.get<PaginationResponse<Load>>('/loads', {
+  const res = await api.get<PaginationResponse<Load>>('/api/loads', {
     params,
   })
   return res.data
@@ -170,7 +225,7 @@ export async function getLoad(loadId: string): Promise<{
     statistics: Record<string, unknown>
   }
 }> {
-  return api.get(`/loads/${loadId}`).then(r => r.data)
+  return api.get(`/api/loads/${loadId}`).then(r => r.data)
 }
 
 export async function assignWinner(payload: {
@@ -186,7 +241,7 @@ export async function assignWinner(payload: {
   data: { load: Load; acceptedBid: Bid; rejectedBidIds?: string[] }
 }> {
   const { loadId, bidId, allocatedVehicles, finalRate, rateType, notes } = payload
-  return api.post(`/loads/${loadId}/assign`, { bidId, allocatedVehicles, finalRate, rateType, notes }).then(r => r.data)
+  return api.post(`/api/loads/${loadId}/assign`, { bidId, allocatedVehicles, finalRate, rateType, notes }).then(r => r.data)
 }
 
 export async function markInTransit(payload: {
@@ -199,7 +254,7 @@ export async function markInTransit(payload: {
 }> {
   const { loadId, actualPickupDate } = payload
   return api
-    .patch(`/loads/${loadId}/mark-in-transit`, {
+    .patch(`/api/loads/${loadId}/mark-in-transit`, {
       actualPickupDate: actualPickupDate
         ? new Date(actualPickupDate).toISOString()
         : undefined,
@@ -210,19 +265,37 @@ export async function markInTransit(payload: {
 export async function markDelivered(payload: {
   loadId: string
   actualDeliveryDate?: string | number
-  deliveryProof?: string
+  receiverName?: string
+  receiverPhone?: string
+  deliveryRemarks?: string
+  deliveryProofFiles?: File[]
 }): Promise<{
   success: boolean
   message?: string
   data: { load: Load }
 }> {
-  const { loadId, actualDeliveryDate, deliveryProof } = payload
+  const {
+    loadId,
+    actualDeliveryDate,
+    receiverName,
+    receiverPhone,
+    deliveryRemarks,
+    deliveryProofFiles,
+  } = payload
+  const formData = new FormData()
+  if (actualDeliveryDate) {
+    formData.append('actualDeliveryDate', new Date(actualDeliveryDate).toISOString())
+  }
+  if (receiverName) formData.append('receiverName', receiverName)
+  if (receiverPhone) formData.append('receiverPhone', receiverPhone)
+  if (deliveryRemarks) formData.append('deliveryRemarks', deliveryRemarks)
+  ;(deliveryProofFiles || []).forEach((file) => {
+    formData.append('deliveryProofFiles', file)
+  })
+
   return api
-    .patch(`/loads/${loadId}/mark-delivered`, {
-      actualDeliveryDate: actualDeliveryDate
-        ? new Date(actualDeliveryDate).toISOString()
-        : undefined,
-      deliveryProof,
+    .patch(`/api/loads/${loadId}/mark-delivered`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
     .then(r => r.data)
 }
@@ -242,6 +315,13 @@ export async function compareBids(loadId: string): Promise<{
     }
   }
 }> {
-  return api.get(`/loads/${loadId}/bids/compare`).then(r => r.data)
+  return api.get(`/api/loads/${loadId}/bids/compare`).then(r => r.data)
+}
+
+export async function approveDeviation(
+  loadId: string,
+  action: 'approve' | 'reject'
+): Promise<{ success: boolean; load: any }> {
+  return api.patch(`/api/loads/${loadId}/approve-deviation`, { action }).then(r => r.data)
 }
 

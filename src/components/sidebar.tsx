@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils'
 import { getFilteredSideLinks } from '@/data/sidelinks'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store'
+import { useSettings } from './settings-provider'
+import { useTheme } from './theme-provider'
 
 interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
   isCollapsed: boolean
@@ -20,9 +22,14 @@ export default function Sidebar({
 }: SidebarProps) {
   const [navOpened, setNavOpened] = useState(false)
   const user = useSelector((state: RootState) => state.auth.user)
+  const { lightLogo, darkLogo } = useSettings()
+  const { theme } = useTheme()
 
   // Filter sidebar links based on user role
-    const filteredLinks = getFilteredSideLinks(user?.role, user?.permissions, user?.accessLevel)
+  const filteredLinks = getFilteredSideLinks(user?.role, user?.permissions, user?.accessLevel, user?.team)
+
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const currentLogo = (isDark ? darkLogo : lightLogo) || '/images/logo.png'
 
 
   /* Make body not scrollable when navbar is opened */
@@ -64,7 +71,7 @@ export default function Sidebar({
             {!isCollapsed ? <img
               alt='Raylogix'
               className={cn('mx-auto h-auto object-contain transition-[width]', isCollapsed ? 'md:w-8' : 'w-[120px]')}
-              src='/images/logo.png'
+              src={currentLogo}
             /> : <img
               alt='Raylogix'
               className={cn('mx-auto h-auto object-contain transition-[width]', isCollapsed ? 'md:w-8' : 'w-[120px]')}

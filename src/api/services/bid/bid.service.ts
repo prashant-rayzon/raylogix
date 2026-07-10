@@ -8,6 +8,7 @@ export type Bid = {
   loadId: string
   transporterId: string
   bidAmount: number
+  originalBidAmount?: number
   currency?: string
   status: BidStatus
   estimatedDeliveryDate: string
@@ -17,6 +18,15 @@ export type Bid = {
   rejectionReason?: string
   createdAt?: string
   expiresAt?: string
+  rateDetails?: {
+    offerRate?: number
+    offlineRate?: number
+    specialOfferRate?: number
+    finalConfirmedRate?: number
+    offlineRateSource?: string
+    offlineRateNotes?: string
+    updatedAt?: string
+  }
   transporter?: {
     _id?: string
     transporterName?: string
@@ -39,6 +49,15 @@ export type UpdateBidPayload = {
   bidAmount: number
 }
 
+export type UpdateBidRatePayload = {
+  bidAmount?: number
+  offlineRate?: number
+  specialOfferRate?: number
+  finalConfirmedRate?: number
+  offlineRateSource?: string
+  offlineRateNotes?: string
+}
+
 /**
  * List all bids (filtered by current user/role)
  */
@@ -50,7 +69,7 @@ export async function listBids(params: {
   sortBy?: string
   search?: string
 }): Promise<PaginationResponse<Bid>> {
-  const res = await api.get<PaginationResponse<Bid>>('/bids', {
+  const res = await api.get<PaginationResponse<Bid>>('/api/bids', {
     params,
   })
   return res.data
@@ -65,7 +84,7 @@ export async function getBidsForLoad(loadId: string, params?: {
   limit?: number
   sortBy?: string
 }): Promise<PaginationResponse<Bid>> {
-  const res = await api.get<PaginationResponse<Bid>>(`/bids/load/${loadId}`, {
+  const res = await api.get<PaginationResponse<Bid>>(`/api/bids/load/${loadId}`, {
     params,
   })
   return res.data
@@ -78,7 +97,7 @@ export async function getBid(bidId: string): Promise<{
   success: boolean
   data: { bid: Bid }
 }> {
-  return api.get(`/bids/${bidId}`).then(r => r.data)
+  return api.get(`/api/bids/${bidId}`).then(r => r.data)
 }
 
 /**
@@ -89,7 +108,7 @@ export async function createBid(payload: CreateBidPayload): Promise<{
   message?: string
   data: { bid: Bid }
 }> {
-  return api.post('/bids', payload).then(r => r.data)
+  return api.post('/api/bids', payload).then(r => r.data)
 }
 
 /**
@@ -101,7 +120,7 @@ export async function acceptBid(bidId: string): Promise<{
   message?: string
   data: { bid: Bid }
 }> {
-  return api.patch(`/bids/${bidId}/accept`).then(r => r.data)
+  return api.patch(`/api/bids/${bidId}/accept`).then(r => r.data)
 }
 
 /**
@@ -112,7 +131,7 @@ export async function rejectBid(bidId: string, reason?: string): Promise<{
   message?: string
   data: { bid: Bid }
 }> {
-  return api.patch(`/bids/${bidId}/reject`, { reason }).then(r => r.data)
+  return api.patch(`/api/bids/${bidId}/reject`, { reason }).then(r => r.data)
 }
 
 /**
@@ -123,18 +142,18 @@ export async function updateBid(bidId: string, payload: UpdateBidPayload): Promi
   message?: string
   data: { bid: Bid }
 }> {
-  return api.patch(`/bids/${bidId}/update`, payload).then(r => r.data)
+  return api.patch(`/api/bids/${bidId}/update`, payload).then(r => r.data)
 }
 
 /**
  * Update final negotiated amount (Company admin only, pending bids only)
  */
-export async function updateNegotiatedAmount(bidId: string, payload: UpdateBidPayload): Promise<{
+export async function updateNegotiatedAmount(bidId: string, payload: UpdateBidRatePayload): Promise<{
   success: boolean
   message?: string
   data: { bid: Bid }
 }> {
-  return api.patch(`/bids/${bidId}/negotiated-amount`, payload).then(r => r.data)
+  return api.patch(`/api/bids/${bidId}/negotiated-amount`, payload).then(r => r.data)
 }
 
 /**
@@ -145,5 +164,5 @@ export async function withdrawBid(bidId: string): Promise<{
   message?: string
   data?: { bid: Bid }
 }> {
-  return api.delete(`/bids/${bidId}`).then(r => r.data)
+  return api.delete(`/api/bids/${bidId}`).then(r => r.data)
 }

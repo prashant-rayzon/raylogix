@@ -132,7 +132,7 @@ class DashboardService {
     limit?: number
   }): Promise<DashboardData> {
     try {
-      const response = await apiClient.get('/dashboard', { params })
+      const response = await apiClient.get('/api/dashboard', { params })
       return response.data.data
     } catch (error) {
       throw error

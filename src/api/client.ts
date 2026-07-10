@@ -3,6 +3,8 @@ import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axio
 
 const BASE_URL =
   import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_API_BASE ||
+  import.meta.env.VITE_API_BASE_URL ||
   `${(import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')}/api`;
 
 const getTenantSubdomain = () => {
@@ -117,9 +119,17 @@ client.interceptors.response.use(
         }
 
         // Call refresh endpoint
-        const response = await axios.post(`${BASE_URL}/auth/refresh-token`, {
-          refreshToken,
-        });
+        const headers: Record<string, string> = {};
+        const tenantSubdomain = getTenantSubdomain();
+        if (tenantSubdomain) {
+          headers['X-Tenant-Subdomain'] = tenantSubdomain;
+        }
+
+        const response = await axios.post(
+          `${BASE_URL}/auth/refresh-token`,
+          { refreshToken },
+          { headers }
+        );
 
         const { accessToken, refreshToken: newRefreshToken } = response.data;
 

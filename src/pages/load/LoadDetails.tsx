@@ -54,12 +54,14 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
+import { getApiErrorMessage } from '@/lib/api-error'
 import { useNotifications } from '@/contexts/NotificationContext'
 import { useAppDispatch } from '@/store'
 import {
   applyRealtimeLoadAssignment,
   upsertRealtimeBid,
   upsertRealtimeLoad,
+  assignWinnerAsync,
 } from '@/store/slices/loadSlice'
 import {
   AlertDialog,
@@ -73,18 +75,22 @@ import {
 } from '@/components/ui/alert-dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { NegotiationChatPanel } from '@/components/chat/NegotiationChatPanel'
+import { NegotiatePriceModal } from '@/components/modals/NegotiatePriceModal'
+import { PriceHistoryModal } from '@/components/modals/PriceHistoryModal'
 import { cn } from '@/lib/utils'
 
-import type { LoadStatus } from '@/api/services/load/loads.service'
+import { type LoadStatus, approveDeviation } from '@/api/services/load/loads.service'
 import { branchesService, type VehicleMovement } from '@/api/services/branches/branches.service'
 import { useLoadStore } from '@/lib/hooks/useLoadStore'
 import { bid } from '@/api/services'
 import { createBidNegotiation } from '@/api/services/chat/conversations.service'
-import { Label } from '@radix-ui/react-dropdown-menu'
+import { Label } from '@/components/ui/label'
 
 const statusVariants: Record<LoadStatus, { label: string; className: string; icon: React.ReactNode }> = {
   open: {
-    label: 'Open for Bids',
+    label: 'Open',
     className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     icon: <Package className="h-3.5 w-3.5" />,
   },
@@ -104,7 +110,7 @@ const statusVariants: Record<LoadStatus, { label: string; className: string; ico
     icon: <CheckCircle className="h-3.5 w-3.5" />,
   },
   canceled: {
-    label: 'Canceled',
+    label: 'Cancelled',
     className: 'bg-red-50 text-red-700 border-red-200',
     icon: <XCircle className="h-3.5 w-3.5" />,
   },
@@ -153,6 +159,21 @@ const formatDateOnly = (value?: string) => {
 
 const formatMoney = (amount?: number) =>
   typeof amount === 'number' ? `₹${amount.toLocaleString('en-IN')}` : 'N/A'
+
+const getBidRates = (bid: any) => {
+  const rateDetails = bid?.rateDetails || {}
+  return {
+    offerRate: rateDetails.offerRate ?? bid?.originalBidAmount ?? bid?.bidAmount,
+    offlineRate: rateDetails.offlineRate,
+    specialOfferRate: rateDetails.specialOfferRate,
+    finalConfirmedRate: rateDetails.finalConfirmedRate,
+  }
+}
+
+const getEffectiveBidRate = (bid: any) => {
+  const rates = getBidRates(bid)
+  return rates.finalConfirmedRate ?? rates.offlineRate ?? rates.specialOfferRate ?? rates.offerRate ?? bid?.bidAmount
+}
 
 const getBidTransporterName = (b: any) =>
   b.transporter?.name ||
@@ -299,10 +320,13 @@ const BidCard = ({
   openNegotiatedAmountModal,
   openingNegotiationBidId,
   handleOpenChat,
+  handleOpenPriceHistory,
 }: any) => {
   const transporterName = getBidTransporterName(bid)
   const isSelectable = isAdmin && bid.status === 'pending'
-  const isLowest = typeof lowestAmount === 'number' && bid.bidAmount === lowestAmount
+  const rates = getBidRates(bid)
+  const displayAmount = getEffectiveBidRate(bid)
+  const isLowest = typeof lowestAmount === 'number' && displayAmount === lowestAmount
 
   return (
     <div
@@ -320,7 +344,7 @@ const BidCard = ({
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-base font-bold leading-none">{formatMoney(bid.bidAmount)}</p>
+            <p className="text-base font-bold leading-none">{formatMoney(displayAmount)}</p>
             {isLowest && (
               <Badge variant="outline" className="h-5 gap-1 border-emerald-200 bg-emerald-50 px-1.5 text-[10px] text-emerald-700">
                 <Award className="h-3 w-3" />
@@ -361,6 +385,33 @@ const BidCard = ({
               </span>
             )}
           </div>
+          <div className="mt-3 grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
+            <div className="rounded-md bg-slate-50 px-2.5 py-1.5">
+              Offer Rate: <span className="font-medium text-foreground">{formatMoney(rates.offerRate)}</span>
+            </div>
+            <div className="rounded-md bg-slate-50 px-2.5 py-1.5">
+              Offline Rate: <span className="font-medium text-foreground">{formatMoney(rates.offlineRate)}</span>
+            </div>
+            <div className="rounded-md bg-amber-50 px-2.5 py-1.5 text-amber-800">
+              Special Offer: <span className="font-medium">{formatMoney(rates.specialOfferRate)}</span>
+            </div>
+            <div className="rounded-md bg-emerald-50 px-2.5 py-1.5 text-emerald-800">
+              Final Confirmed: <span className="font-medium">{formatMoney(rates.finalConfirmedRate)}</span>
+            </div>
+          </div>
+          {(isAdmin || isMyBid) && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                handleOpenPriceHistory?.(bid)
+              }}
+              className="mt-2.5 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+            >
+              <Clock className="h-3 w-3" />
+              View Price Negotiation History
+            </button>
+          )}
           {isSelected && bid.status === 'pending' && (
             <div className="mt-2 flex items-center gap-1.5 text-xs font-medium text-primary">
               <CheckCircle className="h-3.5 w-3.5" />
@@ -378,7 +429,7 @@ const BidCard = ({
                 className="h-8 gap-1.5 px-2.5 text-xs"
                 onClick={(event) => {
                   event.stopPropagation()
-                  handleOpenNegotiation(bid._id)
+                  handleOpenNegotiation(bid)
                 }}
                 disabled={openingNegotiationBidId === bid._id}
               >
@@ -394,6 +445,7 @@ const BidCard = ({
                 className="h-8 gap-1.5 bg-primary px-2.5 text-xs hover:bg-primary/90"
                 onClick={(event) => {
                   event.stopPropagation()
+                  console.log('⭐ Set Amount button clicked for bid:', bid._id)
                   openNegotiatedAmountModal(bid)
                 }}
               >
@@ -522,6 +574,23 @@ const GateTrackingCard = ({
   )
 }
 
+const getBidConversationRecipientId = (bidData: any, isAdmin: boolean, fallbackUserId?: string | null) => {
+  if (isAdmin) {
+    return (
+      bidData?.createdBy?._id ||
+      bidData?.createdBy ||
+      bidData?.transporterId?.userId?._id ||
+      bidData?.transporterId?.userId ||
+      bidData?.transporter?._id ||
+      bidData?.transporterId?._id ||
+      bidData?.transporterId ||
+      null
+    )
+  }
+
+  return fallbackUserId || null
+}
+
 export default function LoadDetails() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -558,16 +627,60 @@ export default function LoadDetails() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showBidModal, setShowBidModal] = useState(false)
   const [openingNegotiationBidId, setOpeningNegotiationBidId] = useState<string | null>(null)
-  const [negotiatedBidId, setNegotiatedBidId] = useState<string | null>(null)
-  const [negotiatedAmount, setNegotiatedAmount] = useState<string>('')
-  const [savingNegotiatedAmount, setSavingNegotiatedAmount] = useState(false)
+  const [finalConfirmedAmount, setFinalConfirmedAmount] = useState<string>('')
   const [showNegotiatedAmountModal, setShowNegotiatedAmountModal] = useState(false)
+  const [showNegotiationCenter, setShowNegotiationCenter] = useState(false)
+  const [activeNegotiationBid, setActiveNegotiationBid] = useState<any | null>(null)
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
 
-  const [assignBidId, setAssignBidId] = useState<string>('')
+  const [resolvingDeviation, setResolvingDeviation] = useState(false)
+
+  const handleResolveDeviation = async (action: 'approve' | 'reject') => {
+    if (!id) return
+    if (!window.confirm(`Are you sure you want to ${action} this price deviation?`)) return
+    try {
+      setResolvingDeviation(true)
+      const res = await approveDeviation(id, action)
+      if (res.success) {
+        toast({
+          title: 'Success',
+          description: `Price deviation request ${action}ed successfully.`
+        })
+        getLoadDetails(id)
+      }
+    } catch (e: any) {
+      toast({
+        title: 'Error',
+        description: getApiErrorMessage(e, `Failed to resolve price deviation.`),
+        variant: 'destructive'
+      })
+    } finally {
+      setResolvingDeviation(false)
+    }
+  }
+
+  const [assignBidId, setAssignBidId] = useState<any>('')
   const [assignVehicleCount, setAssignVehicleCount] = useState<string>('1')
-  const [deliveryProof, setDeliveryProof] = useState<string>('')
+  const [deliveryProofFiles, setDeliveryProofFiles] = useState<File[]>([])
+  const [receiverName, setReceiverName] = useState<string>('')
+  const [receiverPhone, setReceiverPhone] = useState<string>('')
+  const [deliveryRemarks, setDeliveryRemarks] = useState<string>('')
+  const [showDeliveryConfirmModal, setShowDeliveryConfirmModal] = useState(false)
   const [gateMovements, setGateMovements] = useState<VehicleMovement[]>([])
   const [gateMovementsLoading, setGateMovementsLoading] = useState(false)
+
+  // Advanced price negotiation modal state
+  const [showAdvancedPriceModal, setShowAdvancedPriceModal] = useState(false)
+  const [selectedBidForPricing, setSelectedBidForPricing] = useState<any>(null)
+
+  // Price history modal state
+  const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false)
+  const [selectedBidForHistory, setSelectedBidForHistory] = useState<any>(null)
+
+  const handleOpenPriceHistory = useCallback((bidData: any) => {
+    setSelectedBidForHistory(bidData)
+    setShowPriceHistoryModal(true)
+  }, [])
 
   // Use the custom hook for bid filtering
   const {
@@ -613,6 +726,22 @@ export default function LoadDetails() {
 
   const loadOwnerUserId =
     typeof load?.createdBy === 'string' ? load.createdBy : load?.createdBy?._id
+  const activeRecipientId = useMemo(
+    () => getBidConversationRecipientId(activeNegotiationBid, isAdmin, loadOwnerUserId),
+    [activeNegotiationBid, isAdmin, loadOwnerUserId]
+  )
+  const activeNegotiationTitle = useMemo(() => {
+    if (!activeNegotiationBid) return 'Negotiation Center'
+    const loadCreator =
+      typeof load?.createdBy === 'object' && load?.createdBy
+        ? load.createdBy
+        : null
+    return isAdmin
+      ? getBidTransporterName(activeNegotiationBid)
+      : [loadCreator?.firstName, loadCreator?.lastName].filter(Boolean).join(' ') ||
+      loadCreator?.email ||
+      'Company Admin'
+  }, [activeNegotiationBid, isAdmin, load?.createdBy])
 
   const sortedBids = useMemo(
     () => (bids || []).slice().sort((a: any, b: any) => a.bidAmount - b.bidAmount),
@@ -637,6 +766,26 @@ export default function LoadDetails() {
     0,
     Number(selectedAssignBid?.vehiclesOffered || 1) - Number(selectedAssignBid?.allocatedVehicles || 0)
   )
+  const previousAssignBidIdRef = useRef<string | null>(null)
+
+  const getInitialFinalRateValue = useCallback((bidData: any) => {
+    const rates = getBidRates(bidData)
+    return String(
+      rates.finalConfirmedRate ??
+      rates.offlineRate ??
+      rates.specialOfferRate ??
+      rates.offerRate ??
+      bidData?.bidAmount ??
+      ''
+    )
+  }, [])
+
+  const resetAssignmentModalState = useCallback(() => {
+    previousAssignBidIdRef.current = null
+    setAssignBidId('')
+    setAssignVehicleCount('1')
+    setFinalConfirmedAmount('')
+  }, [])
 
   const lowestBid = sortedBids[0]
   const statusMeta = statusVariants[load?.status || 'open']
@@ -653,7 +802,7 @@ export default function LoadDetails() {
   // Calculate bid statistics
   const bidStats = useMemo(() => {
     if (!bids || bids.length === 0) return null
-    const amounts = bids.map((b: any) => b.bidAmount)
+    const amounts = bids.map((b: any) => getEffectiveBidRate(b))
     const avg = amounts.reduce((a: number, b: number) => a + b, 0) / amounts.length
     return {
       count: bids.length,
@@ -752,10 +901,13 @@ export default function LoadDetails() {
   }, [bids, assignBidId])
 
   useEffect(() => {
-    if (selectedAssignBid && !showNegotiatedAmountModal) {
-      setNegotiatedAmount(String(selectedAssignBid.bidAmount || ''))
+    if (!showNegotiatedAmountModal || !selectedAssignBid) return
+
+    if (previousAssignBidIdRef.current !== selectedAssignBid._id) {
+      previousAssignBidIdRef.current = selectedAssignBid._id
+      setFinalConfirmedAmount(getInitialFinalRateValue(selectedAssignBid))
     }
-  }, [selectedAssignBid, showNegotiatedAmountModal])
+  }, [selectedAssignBid, showNegotiatedAmountModal, getInitialFinalRateValue])
 
   useEffect(() => {
     if (selectedAssignBid) {
@@ -774,6 +926,11 @@ export default function LoadDetails() {
       clearDetailError()
     }
   }, [detailError, toast, clearDetailError])
+
+  useEffect(() => {
+    if (!showBidModal) return
+    setEstimatedDeliveryDate(load?.deliveryDate || '')
+  }, [showBidModal, load?.deliveryDate])
 
   const handleSubmitBid = async () => {
     if (!id || !bidAmount || !estimatedDeliveryDate) {
@@ -815,7 +972,7 @@ export default function LoadDetails() {
     } catch (error: any) {
       toast({
         title: 'Failed to submit bid',
-        description: error.response?.data?.message || error.message,
+        description: getApiErrorMessage(error, 'Failed to submit bid'),
         variant: 'destructive',
       })
     } finally {
@@ -841,56 +998,17 @@ export default function LoadDetails() {
       setUpdatingBidId(null)
       setUpdatingAmount('')
     } catch (error: any) {
-      toast({ title: 'Failed', description: error.response?.data?.message || 'Unknown error', variant: 'destructive' })
+      toast({ title: 'Failed', description: getApiErrorMessage(error, 'Unknown error'), variant: 'destructive' })
     } finally {
       setSubmittingBid(false)
     }
   }
 
   const openNegotiatedAmountModal = (bidData: any) => {
-    setAssignBidId(bidData._id)
-    setNegotiatedBidId(bidData._id)
-    setNegotiatedAmount(String(bidData.bidAmount || ''))
-    const suggested = Math.max(
-      1,
-      Math.min(
-        remainingVehicles || 1,
-        Math.max(0, Number(bidData?.vehiclesOffered || 1) - Number(bidData?.allocatedVehicles || 0)) || 1
-      )
-    )
-    setAssignVehicleCount(String(suggested))
-    setShowNegotiatedAmountModal(true)
-  }
-
-  const handleSaveNegotiatedAmount = async (targetBidId?: string) => {
-    const bidId = targetBidId || negotiatedBidId || assignBidId
-    if (!bidId || !negotiatedAmount) return
-
-    const amount = parseFloat(negotiatedAmount)
-    if (amount <= 0) {
-      toast({ title: 'Error', description: 'Negotiated amount must be greater than 0', variant: 'destructive' })
-      return
-    }
-
-    setSavingNegotiatedAmount(true)
-    try {
-      const response = await bid.updateNegotiatedAmount(bidId, { bidAmount: amount })
-      if (response?.data?.bid) {
-        dispatch(upsertRealtimeBid(response.data.bid as any))
-        setAssignBidId(response.data.bid._id)
-        setNegotiatedAmount(String(response.data.bid.bidAmount || amount))
-      }
-      toast({ title: 'Success', description: 'Negotiated amount saved. You can now accept and assign this bid.' })
-      setNegotiatedBidId(bidId)
-    } catch (error: any) {
-      toast({
-        title: 'Failed to save amount',
-        description: error.response?.data?.message || error.response?.data?.error || error.message || 'Unknown error',
-        variant: 'destructive',
-      })
-    } finally {
-      setSavingNegotiatedAmount(false)
-    }
+    console.log('🔵 openNegotiatedAmountModal called with:', { bidData, bidId: bidData._id, isAdmin })
+    setSelectedBidForPricing(bidData)
+    setShowAdvancedPriceModal(true)
+    console.log('🟢 State updated - showAdvancedPriceModal should be true now')
   }
 
   const handleWithdrawBid = async () => {
@@ -904,7 +1022,7 @@ export default function LoadDetails() {
       setShowDeleteConfirm(false)
       setDeletingBidId(null)
     } catch (error: any) {
-      toast({ title: 'Failed', description: error.response?.data?.message || 'Unknown error', variant: 'destructive' })
+      toast({ title: 'Failed', description: getApiErrorMessage(error, 'Unknown error'), variant: 'destructive' })
     } finally {
       setSubmittingBid(false)
     }
@@ -913,15 +1031,60 @@ export default function LoadDetails() {
   const handleAssignWinner = async () => {
     if (!id || !assignBidId) return
     const vehicleCount = Math.max(1, parseInt(assignVehicleCount || '1', 10) || 1)
+    const finalRate = parseFloat(finalConfirmedAmount)
+
+    // Validate: final rate required
+    if (!Number.isFinite(finalRate) || finalRate <= 0) {
+      toast({ title: 'Error', description: 'Please enter a valid final rate greater than 0', variant: 'destructive' })
+      return
+    }
+
+    // Validate: vehicles available
     if (vehicleCount > remainingVehicles) {
       toast({ title: 'Failed', description: `Only ${remainingVehicles} vehicles remain on this load`, variant: 'destructive' })
       return
     }
+
+
     try {
-      await assignWinner(id, assignBidId, vehicleCount, parseFloat(negotiatedAmount) || undefined)
-      toast({ title: 'Success', description: 'Vehicles assigned successfully!' })
+      const actionResult = await assignWinner(id, assignBidId, vehicleCount, finalRate, 'per_vehicle', 'Assigned via price negotiation') as any
+
+      if (assignWinnerAsync.rejected.match(actionResult)) {
+        throw new Error(String(actionResult.payload || actionResult.error?.message || 'Assignment failed'))
+      }
+
+      const payload = actionResult.payload as any
+
+      // Success - clear rates and show message
+      resetAssignmentModalState()
+      setShowNegotiatedAmountModal(false)
+
+      if (payload?.load?.priceDeviation?.status === 'pending_approval') {
+        toast({
+          title: 'Price Deviation Flagged',
+          description: `Bid rate of ${formatMoney(finalRate)} exceeds target rate. Sent to Company Admin for approval.`,
+          variant: 'default',
+        })
+      } else {
+        toast({
+          title: 'Success',
+          description: `Assigned ${vehicleCount} vehicle(s) at ${formatMoney(finalRate)} each`
+        })
+      }
     } catch (e: any) {
-      toast({ title: 'Failed', description: e?.message || 'Unknown error', variant: 'destructive' })
+      const errorMsg = getApiErrorMessage(e, 'Assignment failed')
+      toast({
+        title: 'Failed',
+        description: errorMsg,
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleNegotiatedAmountModalChange = (nextOpen: boolean) => {
+    setShowNegotiatedAmountModal(nextOpen)
+    if (!nextOpen) {
+      resetAssignmentModalState()
     }
   }
 
@@ -931,43 +1094,55 @@ export default function LoadDetails() {
       await markInTransit(id, new Date().toISOString())
       toast({ title: 'Success', description: 'Load marked as in transit' })
     } catch (e: any) {
-      toast({ title: 'Failed', description: e?.message || 'Unknown error', variant: 'destructive' })
+      toast({ title: 'Failed', description: getApiErrorMessage(e, 'Unknown error'), variant: 'destructive' })
     }
   }
 
   const handleMarkDelivered = async () => {
     if (!id) return
-    try {
-      await markDelivered(id, new Date().toISOString(), deliveryProof || undefined)
-      toast({ title: 'Success', description: 'Load marked as delivered' })
-    } catch (e: any) {
-      toast({ title: 'Failed', description: e?.message || 'Unknown error', variant: 'destructive' })
-    }
-  }
-
-  const handleOpenChat = (bidData: any) => {
-    let transporterId = null
-    if (typeof bidData.createdBy === 'string') {
-      transporterId = bidData.createdBy
-    } else if (bidData.createdBy?._id) {
-      transporterId = bidData.createdBy._id
-    }
-
-    if (transporterId) {
-      navigate(`/chats?userId=${transporterId}&loadId=${id}`)
-    } else {
+    if (!receiverName.trim()) {
       toast({
-        title: 'Error',
-        description: 'Unable to find transporter information',
+        title: 'Receiver required',
+        description: 'Enter receiver name before marking this load as delivered',
         variant: 'destructive',
       })
+      return
+    }
+    if (deliveryProofFiles.length === 0) {
+      toast({
+        title: 'POD required',
+        description: 'Upload at least one POD image or PDF before confirming delivery',
+        variant: 'destructive',
+      })
+      return
+    }
+    try {
+      await markDelivered(
+        id,
+        new Date().toISOString(),
+        receiverName.trim(),
+        receiverPhone.trim() || undefined,
+        deliveryRemarks.trim() || undefined,
+        deliveryProofFiles
+      )
+      toast({ title: 'Success', description: 'Load marked as delivered' })
+      setShowDeliveryConfirmModal(false)
+      setDeliveryProofFiles([])
+      setReceiverName('')
+      setReceiverPhone('')
+      setDeliveryRemarks('')
+    } catch (e: any) {
+      toast({ title: 'Failed', description: getApiErrorMessage(e, 'Unknown error'), variant: 'destructive' })
     }
   }
 
-  const handleOpenNegotiation = async (bidId: string) => {
+  const handleOpenNegotiationCenter = async (bidData: any) => {
+    const bidId = bidData?._id
     if (!bidId) return
 
     setOpeningNegotiationBidId(bidId)
+    setActiveNegotiationBid(bidData)
+    setShowNegotiationCenter(true)
     try {
       const response = await createBidNegotiation(bidId)
       const conversationId = response?.data?._id
@@ -976,16 +1151,20 @@ export default function LoadDetails() {
         throw new Error('Conversation could not be opened')
       }
 
-      navigate(`/chats?conversationId=${conversationId}`)
+      setActiveConversationId(conversationId)
     } catch (error: any) {
-      toast({
-        title: 'Failed to open negotiation',
-        description: error?.response?.data?.error || error?.response?.data?.message || error.message || 'Unknown error',
-        variant: 'destructive',
-      })
+      setActiveConversationId(null)
     } finally {
       setOpeningNegotiationBidId(null)
     }
+  }
+
+  const handleOpenNegotiation = async (bidData: any) => {
+    await handleOpenNegotiationCenter(bidData)
+  }
+
+  const handleOpenChat = async (bidData: any) => {
+    await handleOpenNegotiationCenter(bidData)
   }
 
   if (!load) {
@@ -1051,6 +1230,41 @@ export default function LoadDetails() {
           </div>
         )}
 
+        {load.priceDeviation?.isRequired && load.priceDeviation?.status === 'pending_approval' && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-amber-900 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-bold text-amber-800">⚠️ Price Deviation Action Required</h4>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  {load.priceDeviation.reason || 'The assigned bid amount exceeds the pre-negotiated route ceiling contract price.'} (Deviation: {load.priceDeviation.deviationPercentage?.toFixed(1)}%)
+                </p>
+              </div>
+            </div>
+            {isAdmin && (
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={resolvingDeviation}
+                  onClick={() => handleResolveDeviation('reject')}
+                  className="bg-white border-amber-200 text-amber-700 hover:bg-amber-100/50"
+                >
+                  Reject & Reset Bid
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={resolvingDeviation}
+                  onClick={() => handleResolveDeviation('approve')}
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  Approve Allocation
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         <section className="shrink-0 rounded-xl border bg-background shadow-sm">
           <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
             <div className="min-w-0 space-y-3">
@@ -1071,7 +1285,7 @@ export default function LoadDetails() {
                   <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
                     {load.loadNumber || 'Load details'}
                   </h1>
-                  <span className="text-sm font-medium text-muted-foreground">{load.material || 'Material not specified'}</span>
+                  <span className="text-sm font-medium text-muted-foreground">{load.material || 'Product not specified'}</span>
                 </div>
                 <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center">
                   <span className="inline-flex min-w-0 items-center gap-2 font-medium">
@@ -1102,7 +1316,12 @@ export default function LoadDetails() {
                 </Button>
               )}
               {isAdmin && pendingBids.length > 0 && load.status === 'open' && (
-                <Button className="h-10 gap-2" onClick={() => setShowNegotiatedAmountModal(true)}>
+                <Button
+                  className="h-10 gap-2"
+                  onClick={() => {
+                    setShowNegotiatedAmountModal(true)
+                  }}
+                >
                   <CheckCircle className="h-4 w-4" />
                   Assign Load
                 </Button>
@@ -1114,7 +1333,7 @@ export default function LoadDetails() {
                 </Button>
               )}
               {load.status === 'in_transit' && (
-                <Button className="h-10 gap-2" onClick={handleMarkDelivered}>
+                <Button className="h-10 gap-2" onClick={() => setShowDeliveryConfirmModal(true)}>
                   <CheckCircle className="h-4 w-4" />
                   Mark Delivered
                 </Button>
@@ -1309,6 +1528,7 @@ export default function LoadDetails() {
                             openNegotiatedAmountModal={openNegotiatedAmountModal}
                             openingNegotiationBidId={openingNegotiationBidId}
                             handleOpenChat={handleOpenChat}
+                            handleOpenPriceHistory={handleOpenPriceHistory}
                           />
                         ))}
 
@@ -1366,9 +1586,9 @@ export default function LoadDetails() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-semibold uppercase text-sky-700">Delivery</p>
-                      <p className="mt-1 text-sm font-medium">{load.deliveryLocation?.address || 'N/A'}</p>
+                      <p className="mt-1 text-sm font-medium">{load.deliveryLocation?.branchName || 'N/A'}</p>
                       <p className="text-xs text-muted-foreground">
-                        {[load.deliveryLocation?.city, load.deliveryLocation?.state].filter(Boolean).join(', ') || 'Location not specified'}
+                        {[load.deliveryLocation?.address, load.deliveryLocation?.city, load.deliveryLocation?.state, load.deliveryLocation?.zipCode].filter(Boolean).join(', ') || 'Location not specified'}
                       </p>
                       <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
@@ -1399,25 +1619,86 @@ export default function LoadDetails() {
                   </div>
                 )}
 
-                {load.specialRequirements && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-amber-800">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      Special Requirements
-                    </p>
-                    <p className="mt-1 text-sm text-amber-950">{load.specialRequirements}</p>
+                {Array.isArray(load.attachments) && load.attachments.length > 0 && (
+                  <div className="rounded-lg border bg-slate-50 p-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">Load Attachments</p>
+                    <div className="mt-2 space-y-3">
+                      {load.attachments.map((attachment, index) => {
+                        
+                        return (
+                          <div key={`${attachment.url || attachment.name || index}-${index}`}>
+                              <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+                                <img 
+                                  src={attachment.url} 
+                                  alt={attachment.name || `Attachment ${index + 1}`}
+                                  className="w-full h-auto max-h-96 object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none'
+                                    e.currentTarget.parentElement?.classList.add('hidden')
+                                  }}
+                                />
+                              </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
                 {load.status === 'in_transit' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground">Delivery proof</label>
-                    <Textarea
-                      value={deliveryProof}
-                      onChange={(event) => setDeliveryProof(event.target.value)}
-                      placeholder="Reference number, remarks, or proof note"
-                      className="min-h-[72px] text-sm"
-                    />
+                  <div className="rounded-lg border border-sky-200 bg-sky-50/70 p-3">
+                    <p className="text-xs font-semibold uppercase text-sky-700">Delivery Confirmation</p>
+                    <p className="mt-1 text-sm text-sky-950">
+                      Use the delivery confirmation action to record receiver details, POD link, and final delivery remarks.
+                    </p>
+                  </div>
+                )}
+
+                {load.deliveryConfirmation?.status && (
+                  <div className="rounded-lg border bg-slate-50 p-3">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">Delivery Record</p>
+                    <div className="mt-2 space-y-1 text-sm">
+                      <p>
+                        <span className="text-muted-foreground">Status:</span>{' '}
+                        <span className="font-medium capitalize">{String(load.deliveryConfirmation.status).replace(/_/g, ' ')}</span>
+                      </p>
+                      {load.deliveryConfirmation.receiverName && (
+                        <p>
+                          <span className="text-muted-foreground">Receiver:</span>{' '}
+                          <span className="font-medium">{load.deliveryConfirmation.receiverName}</span>
+                        </p>
+                      )}
+                      {load.deliveryConfirmation.receiverPhone && (
+                        <p>
+                          <span className="text-muted-foreground">Phone:</span>{' '}
+                          <span className="font-medium">{load.deliveryConfirmation.receiverPhone}</span>
+                        </p>
+                      )}
+                      {load.deliveryConfirmation.remarks && (
+                        <p>
+                          <span className="text-muted-foreground">Remarks:</span>{' '}
+                          <span className="font-medium">{load.deliveryConfirmation.remarks}</span>
+                        </p>
+                      )}
+                      {Array.isArray(load.deliveryConfirmation?.proofs) && load.deliveryConfirmation.proofs.length > 0 && (
+                        <div>
+                          <span className="text-muted-foreground">Proof Files:</span>
+                          <div className="mt-1 flex flex-col gap-1">
+                            {load.deliveryConfirmation.proofs.map((proof, index) => (
+                              <a
+                                key={`${proof.url || index}-${index}`}
+                                href={proof.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="truncate font-medium text-primary hover:underline"
+                              >
+                                {proof.label || `POD file ${index + 1}`}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -1462,7 +1743,9 @@ export default function LoadDetails() {
                             </p>
                             <p className="mt-1 text-xs text-muted-foreground">
                               {allocation.allocatedVehicles || 0} vehicles allocated
-                              {typeof allocation.finalRate === 'number' ? ` • ${formatMoney(allocation.finalRate)}` : ''}
+                              {typeof (allocation.finalRate ?? allocation.finalConfirmedRate) === 'number'
+                                ? ` • ${formatMoney(allocation.finalRate ?? allocation.finalConfirmedRate)}`
+                                : ''}
                             </p>
                             <Badge
                               className={cn(
@@ -1526,6 +1809,15 @@ export default function LoadDetails() {
                     <p className="mt-1 text-xs text-muted-foreground">Delivery by {formatDateOnly(myBid.estimatedDeliveryDate)}</p>
                   </div>
 
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPriceHistory(myBid)}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <Clock className="h-3.5 w-3.5" />
+                    View Price History
+                  </button>
+
                   {myBid.rejectionReason && (
                     <div className="flex gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                       <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -1539,7 +1831,7 @@ export default function LoadDetails() {
                         size="sm"
                         variant="outline"
                         className="gap-2"
-                        onClick={() => handleOpenNegotiation(myBid._id)}
+                        onClick={() => handleOpenNegotiationCenter(myBid)}
                         disabled={openingNegotiationBidId === myBid._id}
                       >
                         {openingNegotiationBidId === myBid._id ? (
@@ -1583,7 +1875,7 @@ export default function LoadDetails() {
                       size="sm"
                       className="w-full gap-2"
                       disabled={!loadOwnerUserId}
-                      onClick={() => loadOwnerUserId && navigate(`/chats?userId=${loadOwnerUserId}&loadId=${id}`)}
+                      onClick={() => handleOpenNegotiationCenter(myBid)}
                     >
                       <MessageCircle className="h-3.5 w-3.5" />
                       Chat with Admin
@@ -1596,332 +1888,211 @@ export default function LoadDetails() {
         </div>
       </Layout.Body>
 
-      {/* Modals - Same as before */}
-      {/* Admin Negotiated Amount Modal */}
-      {/* Admin Negotiated Amount Modal */}
-      <AlertDialog open={showNegotiatedAmountModal} onOpenChange={setShowNegotiatedAmountModal}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-xl">
-              <div className="rounded-full bg-primary/10 p-2">
-                <IndianRupee className="h-5 w-5 text-primary" />
+      <Sheet open={showNegotiationCenter} onOpenChange={setShowNegotiationCenter}>
+        <SheetContent
+          side="right"
+          className="h-[100dvh] w-full overflow-hidden border-l border-slate-200 bg-[#f6f8fb] p-0 sm:max-w-[min(1120px,96vw)]"
+        >
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="border-b border-slate-200 bg-[linear-gradient(180deg,_#ffffff_0%,_#f8fbfc_100%)] px-5 py-4 sm:px-6">
+              <div className="flex flex-col gap-4">
+                <div className="space-y-2 pr-8">
+                  <Badge variant="outline" className="w-fit rounded-full border-primary/20 bg-primary/5 px-3 py-1 text-primary">
+                    Negotiation Center
+                  </Badge>
+                  <div>
+                    <h2 className="text-xl font-semibold tracking-tight text-slate-950">{activeNegotiationTitle}</h2>
+                    <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
+                      Discuss rates, upload documents, reply to messages, and manage negotiation activity with the same chat experience as the main conversations view.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Load</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">{load?.loadNumber || 'N/A'}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Route</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">{pickupCity} to {deliveryCity}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Bid Amount</p>
+                    <p className="mt-1 truncate text-sm font-semibold text-slate-900">
+                      {activeNegotiationBid ? formatMoney(activeNegotiationBid.bidAmount) : 'N/A'}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">Status</p>
+                    <div className="mt-1">
+                      {activeNegotiationBid?.status ? (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'capitalize',
+                            activeNegotiationBid.status === 'pending' && 'border-amber-200 bg-amber-50 text-amber-700',
+                            activeNegotiationBid.status === 'accepted' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
+                            activeNegotiationBid.status === 'rejected' && 'border-red-200 bg-red-50 text-red-700'
+                          )}
+                        >
+                          {activeNegotiationBid.status}
+                        </Badge>
+                      ) : (
+                        <span className="text-sm font-semibold text-slate-900">Open</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-              Set Final Amount & Assign
+            </div>
+
+            <div className="min-h-0 flex-1 p-3 sm:p-4">
+              <div className="h-full min-h-0 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_20px_50px_rgba(15,23,42,0.08)]">
+                <NegotiationChatPanel
+                  conversationId={activeConversationId}
+                  recipientId={activeRecipientId ? String(activeRecipientId) : null}
+                  loadId={id || null}
+                  title={activeNegotiationTitle}
+                />
+              </div>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Assignment Modal - Simple & Clean */}
+      <AlertDialog open={showNegotiatedAmountModal} onOpenChange={handleNegotiatedAmountModalChange}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-emerald-600" />
+              Assign Bid
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-muted-foreground">
-              Select a bid, allocate vehicles, and set the negotiated amount for this load.
+            <AlertDialogDescription>
+              Select transporter, confirm rate, and allocate vehicles
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <div className="space-y-6 py-2">
-            {isAdmin && bids.length > 0 && pendingBids.length > 0 ? (
-              <>
-                {/* Bid Selection */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold">
-                    Select Bid
-                  </Label>
-                  <Select value={assignBidId} onValueChange={setAssignBidId}>
-                    <SelectTrigger id="bid-select" className="h-10">
-                      <SelectValue placeholder="Choose a bid to assign" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {pendingBids.map((bid) => (
-                        <SelectItem key={bid._id} value={bid._id}>
-                          <div className="flex items-center justify-between w-full gap-4">
-                            <span className="font-medium">{formatMoney(bid.bidAmount)}</span>
-                            <span className="text-muted-foreground text-sm">
-                              {getBidTransporterName(bid)}
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Bid Details Card */}
-                <div className="rounded-xl border bg-card p-4 space-y-4">
-                  <div className="flex items-center justify-between border-b pb-3">
-                    <span className="text-sm text-muted-foreground">Transporter</span>
-                    <span className="font-medium truncate max-w-[200px]">
-                      {selectedAssignBid ? getBidTransporterName(selectedAssignBid) : '-'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    {/* Vehicle Allocation */}
-                    <div className="space-y-2">
-                      <Label className="text-sm text-muted-foreground">
-                        Allocate Vehicles
-                      </Label>
-                      <Input
-                        id="vehicle-count"
-                        type="number"
-                        min="1"
-                        max={Math.max(1, Math.min(remainingVehicles || 1, selectedAssignBidRemainingVehicles || 1))}
-                        value={assignVehicleCount}
-                        onChange={(event) => setAssignVehicleCount(event.target.value)}
-                        disabled={!assignBidId || savingNegotiatedAmount}
-                        className="h-10"
-                        placeholder="Vehicles"
-                      />
-                    </div>
-
-                    {/* Statistics */}
-                    <div className="space-y-2">
-                      <div className="text-sm text-muted-foreground">Availability</div>
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Load remaining:</span>
-                          <span className="font-semibold">{remainingVehicles}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Bid available:</span>
-                          <span className="font-semibold">{selectedAssignBidRemainingVehicles}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Negotiated Amount */}
-                  <div className="space-y-2 pt-2 border-t">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-semibold">
-                        Negotiated Amount
-                      </Label>
-                      {savingNegotiatedAmount && (
-                        <span className="text-xs text-muted-foreground animate-pulse">
-                          Saving...
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                          ₹
-                        </span>
-                        <Input
-                          id="negotiated-amount"
-                          type="number"
-                          min="1"
-                          value={negotiatedAmount}
-                          onChange={(event) => setNegotiatedAmount(event.target.value)}
-                          disabled={!assignBidId || savingNegotiatedAmount}
-                          className="h-10 pl-7"
-                          placeholder="Enter amount"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={!assignBidId || savingNegotiatedAmount}
-                        onClick={() => handleSaveNegotiatedAmount(assignBidId)}
-                        className="h-10 px-4 whitespace-nowrap"
-                      >
-                        {savingNegotiatedAmount ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          'Save Amount'
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <div className="rounded-full bg-muted p-3 mb-3">
-                  <AlertCircle className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  {bids.length === 0 ? 'No bids available to assign.' : 'No pending bids available.'}
-                </p>
-                <p className="text-xs text-muted-foreground/60 mt-1">
-                  {bids.length === 0
-                    ? 'Wait for transporters to submit their bids.'
-                    : 'All bids have been processed.'}
-                </p>
-              </div>
-            )}
-          </div>
-          {/* Admin Negotiated Amount Modal */}
-          <AlertDialog open={showNegotiatedAmountModal} onOpenChange={setShowNegotiatedAmountModal}>
-            <AlertDialogContent className="max-w-lg">
-              <AlertDialogHeader>
-                <AlertDialogTitle className="flex items-center gap-2 text-xl">
-                  <div className="rounded-full bg-primary/10 p-2">
-                    <IndianRupee className="h-5 w-5 text-primary" />
-                  </div>
-                  Set Final Amount & Assign
-                </AlertDialogTitle>
-                <AlertDialogDescription className="text-muted-foreground">
-                  Select a bid, allocate vehicles, and set the negotiated amount for this load.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-
-              <div className="space-y-6 py-2">
-                {isAdmin && bids.length > 0 && pendingBids.length > 0 ? (
-                  <>
-                    {/* Bid Selection */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-semibold">
-                        Select Bid
-                      </Label>
-                      <Select value={assignBidId} onValueChange={setAssignBidId}>
-                        <SelectTrigger id="bid-select" className="h-10">
-                          <SelectValue placeholder="Choose a bid to assign" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {pendingBids.map((bid) => (
-                            <SelectItem key={bid._id} value={bid._id}>
-                              <div className="flex items-center justify-between w-full gap-4">
-                                <span className="font-medium">{formatMoney(bid.bidAmount)}</span>
-                                <span className="text-muted-foreground text-sm">
-                                  {getBidTransporterName(bid)}
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Bid Details Card */}
-                    <div className="rounded-xl border bg-card p-4 space-y-4">
-                      <div className="flex items-center justify-between border-b pb-3">
-                        <span className="text-sm text-muted-foreground">Transporter</span>
-                        <span className="font-medium truncate max-w-[200px]">
-                          {selectedAssignBid ? getBidTransporterName(selectedAssignBid) : '-'}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* Vehicle Allocation */}
-                        <div className="space-y-2">
-                          <Label className="text-sm text-muted-foreground">
-                            Allocate Vehicles
-                          </Label>
-                          <Input
-                            id="vehicle-count"
-                            type="number"
-                            min="1"
-                            max={Math.max(1, Math.min(remainingVehicles || 1, selectedAssignBidRemainingVehicles || 1))}
-                            value={assignVehicleCount}
-                            onChange={(event) => setAssignVehicleCount(event.target.value)}
-                            disabled={!assignBidId || savingNegotiatedAmount}
-                            className="h-10"
-                            placeholder="Vehicles"
-                          />
-                        </div>
-
-                        {/* Statistics */}
-                        <div className="space-y-2">
-                          <div className="text-sm text-muted-foreground">Availability</div>
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Load remaining:</span>
-                              <span className="font-semibold">{remainingVehicles}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">Bid available:</span>
-                              <span className="font-semibold">{selectedAssignBidRemainingVehicles}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Negotiated Amount */}
-                      <div className="space-y-2 pt-2 border-t">
-                        <div className="flex items-center justify-between">
-                          <Label className="text-sm font-semibold">
-                            Negotiated Amount
-                          </Label>
-                          {savingNegotiatedAmount && (
-                            <span className="text-xs text-muted-foreground animate-pulse">
-                              Saving...
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                              ₹
-                            </span>
-                            <Input
-                              id="negotiated-amount"
-                              type="number"
-                              min="1"
-                              value={negotiatedAmount}
-                              onChange={(event) => setNegotiatedAmount(event.target.value)}
-                              disabled={!assignBidId || savingNegotiatedAmount}
-                              className="h-10 pl-7"
-                              placeholder="Enter amount"
-                            />
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={!assignBidId || savingNegotiatedAmount}
-                            onClick={() => handleSaveNegotiatedAmount(assignBidId)}
-                            className="h-10 px-4 whitespace-nowrap"
-                          >
-                            {savingNegotiatedAmount ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              'Save Amount'
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="rounded-full bg-muted p-3 mb-3">
-                      <AlertCircle className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium text-muted-foreground">
-                      {bids.length === 0 ? 'No bids available to assign.' : 'No pending bids available.'}
-                    </p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">
-                      {bids.length === 0
-                        ? 'Wait for transporters to submit their bids.'
-                        : 'All bids have been processed.'}
-                    </p>
-                  </div>
-                )}
+          {isAdmin && pendingBids.length > 0 ? (
+            <div className="space-y-4">
+              {/* Bid Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="assign-bid-select" className="text-xs font-semibold">
+                  Transporter Bid
+                </Label>
+                <Select value={assignBidId} onValueChange={setAssignBidId}>
+                  <SelectTrigger id="assign-bid-select" className="h-9">
+                    <SelectValue placeholder="Select bid to assign" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pendingBids.map((bid) => (
+                      <SelectItem key={bid._id} value={bid._id}>
+                        {getBidTransporterName(bid)} — {formatMoney(bid.bidAmount)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <AlertDialogFooter className="flex-col-reverse sm:flex-row gap-2">
-                {/* Action Button - Primary Action First for better UX */}
-                <Button
-                  className="w-full sm:w-auto flex-1 h-11 gap-2 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary/80 text-white font-semibold shadow-lg shadow-primary/20 transition-all duration-200 order-1 sm:order-2"
-                  onClick={handleAssignWinner}
-                  disabled={!assignBidId || pendingBids.length === 0 || assigning}
-                >
-                  {assigning ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Assigning...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-4 w-4" />
-                      Accept & Assign
-                    </>
+              {selectedAssignBid && (
+                <>
+                  {/* Rate Display */}
+                  <div className="rounded-lg bg-slate-50 p-3 space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Original Bid</span>
+                      <span className="font-semibold">{formatMoney(selectedAssignBid.bidAmount)}</span>
+                    </div>
+                    {selectedAssignBid.rateDetails?.finalConfirmedRate && (
+                      <div className="flex justify-between border-t pt-2">
+                        <span className="text-slate-600">Final Confirmed</span>
+                        <span className="font-semibold text-emerald-700">
+                          {formatMoney(selectedAssignBid.rateDetails.finalConfirmedRate)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Final Rate */}
+                  <div className="space-y-2">
+                    <Label htmlFor="assign-final-rate" className="text-xs font-semibold">
+                      Final Rate (₹ / vehicle)
+                    </Label>
+                    <Input
+                      id="assign-final-rate"
+                      type="number"
+                      min="0"
+                      disabled={true}
+                      value={finalConfirmedAmount}
+                      onChange={(e) => setFinalConfirmedAmount(e.target.value)}
+                      placeholder="Enter rate"
+                      className="h-9 font-mono"
+                    />
+                  </div>
+
+                  {/* Vehicle Allocation */}
+                  <div className="space-y-2">
+                    <Label htmlFor="assign-vehicles" className="text-xs font-semibold">
+                      Vehicles ({remainingVehicles} available)
+                    </Label>
+                    <Input
+                      id="assign-vehicles"
+                      type="number"
+                      min="1"
+                      max={Math.max(1, Math.min(remainingVehicles || 1, selectedAssignBidRemainingVehicles || 1))}
+                      value={assignVehicleCount}
+                      onChange={(e) => setAssignVehicleCount(e.target.value)}
+                      placeholder="1"
+                      className="h-9 font-mono"
+                    />
+                  </div>
+
+                  {/* Total Cost */}
+                  <div className="rounded-lg bg-emerald-50 p-3 border border-emerald-200">
+                    <p className="text-xs text-emerald-700 mb-1">Total Cost</p>
+                    <p className="text-lg font-bold text-emerald-700">
+                      {finalConfirmedAmount && assignVehicleCount
+                        ? formatMoney(parseFloat(finalConfirmedAmount) * parseInt(assignVehicleCount))
+                        : formatMoney(0)}
+                    </p>
+                  </div>
+
+                  {/* Validation Error */}
+                  {(!finalConfirmedAmount || parseFloat(finalConfirmedAmount) <= 0) && (
+                    <div className="flex gap-2 rounded-lg bg-red-50 p-2 text-xs text-red-700 border border-red-200">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>Rate must be greater than 0</span>
+                    </div>
                   )}
-                </Button>
+                   
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              {pendingBids.length === 0 ? 'No pending bids to assign' : 'No bids available'}
+            </div>
+          )}
 
-                <AlertDialogCancel
-                  disabled={savingNegotiatedAmount}
-                  className="min-w-[80px] order-2 sm:order-1"
-                >
-                  Cancel
-                </AlertDialogCancel>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={assigning}>Cancel</AlertDialogCancel>
+            <Button
+              onClick={handleAssignWinner}
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+            >
+              {assigning ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Assigning...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4" />
+                  Assign
+                </>
+              )}
+            </Button>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
@@ -1955,6 +2126,85 @@ export default function LoadDetails() {
               {submittingBid ? 'Updating...' : 'Update Bid'}
             </AlertDialogAction>
           </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDeliveryConfirmModal} onOpenChange={setShowDeliveryConfirmModal}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogTitle className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-emerald-600" />
+            Confirm Delivery
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Record receiver details and POD information before closing this outbound load.
+              </p>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Receiver Name *</label>
+                <Input
+                  value={receiverName}
+                  onChange={(event) => setReceiverName(event.target.value)}
+                  placeholder="Enter receiver name"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Receiver Phone</label>
+                <Input
+                  value={receiverPhone}
+                  onChange={(event) => setReceiverPhone(event.target.value)}
+                  placeholder="Enter receiver phone"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">POD Upload *</label>
+                <Input
+                  type="file"
+                  multiple
+                  accept=".jpg,.jpeg,.png,.webp,.pdf"
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files || [])
+                    setDeliveryProofFiles(files)
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Upload up to 5 files. Supported: JPG, PNG, WEBP, PDF.
+                </p>
+                {deliveryProofFiles.length > 0 && (
+                  <div className="rounded-md border bg-slate-50 p-2">
+                    <p className="text-xs font-medium text-slate-700">Selected files</p>
+                    <div className="mt-2 space-y-1">
+                      {deliveryProofFiles.map((file, index) => (
+                        <div key={`${file.name}-${index}`} className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                          <span className="truncate">{file.name}</span>
+                          <span>{Math.max(1, Math.round(file.size / 1024))} KB</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Delivery Remarks</label>
+                <Textarea
+                  value={deliveryRemarks}
+                  onChange={(event) => setDeliveryRemarks(event.target.value)}
+                  placeholder="Any final delivery note, shortage note, or receiver confirmation remarks"
+                  className="min-h-[90px] text-sm"
+                />
+              </div>
+            </div>
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleMarkDelivered}>
+              Confirm & Mark Delivered
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
@@ -2029,16 +2279,6 @@ export default function LoadDetails() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Estimated Delivery Date</label>
-                <Input
-                  type="datetime-local"
-                  value={estimatedDeliveryDate}
-                  onChange={(e) => setEstimatedDeliveryDate(e.target.value)}
-                  disabled={submittingBid}
-                  className="text-sm"
-                />
-              </div>
-              <div className="space-y-2">
                 <label className="text-sm font-medium text-muted-foreground">Comments (Optional)</label>
                 <Textarea
                   placeholder="Add any relevant comments..."
@@ -2063,6 +2303,37 @@ export default function LoadDetails() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Advanced Price Negotiation Modal */}
+      <NegotiatePriceModal
+        isOpen={showAdvancedPriceModal}
+        bidId={selectedBidForPricing?._id || ''}
+        currentPrice={selectedBidForPricing?.bidAmount}
+        isAdmin={isAdmin}
+        constraints={{
+          minPrice: load?.pricing?.floorPrice,
+          maxPrice: load?.pricing?.ceilingPrice
+        }}
+        onClose={() => {
+          setShowAdvancedPriceModal(false)
+          setSelectedBidForPricing(null)
+        }}
+        onSuccess={() => {
+          // Reload bids after successful price update
+          getLoadDetails(id || '')
+        }}
+      />
+
+      {/* Price Negotiation History Modal */}
+      <PriceHistoryModal
+        isOpen={showPriceHistoryModal}
+        bidId={selectedBidForHistory?._id || ''}
+        transporterName={selectedBidForHistory ? getBidTransporterName(selectedBidForHistory) : ''}
+        onClose={() => {
+          setShowPriceHistoryModal(false)
+          setSelectedBidForHistory(null)
+        }}
+      />
     </Layout>
   )
 }

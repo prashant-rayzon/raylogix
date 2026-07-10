@@ -1,8 +1,8 @@
 // frontend/src/components/users/EditUserModal.tsx
 import { useState, useEffect } from 'react';
-import { usersService } from '../../../api/services/users/users.service';
+import { usersService } from '@/api/services/users/users.service';
 import type { UserRole } from '@/api/types';
-import { useRole } from '../../../lib/hooks/useRole';
+import { useRole } from '@/lib/hooks/useRole';
 import { 
   Mail, 
   UserCircle, 
@@ -17,10 +17,10 @@ import {
   Search,
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { PermissionGate } from '../../../components/auth/PermissionGate';
+import { PermissionGate } from '@/components/auth/PermissionGate';
 
 import { cn } from '@/lib/utils';
-import { PERMISSION_GROUPS } from '@/lib/permissions';
+import { PERMISSION_GROUPS, getAssignablePermissionsForRole } from '@/lib/permissions';
 
 interface EditUserModalProps {
   isOpen: boolean;
@@ -37,6 +37,7 @@ interface UserFormData {
   username: string;
   role: UserRole;
   isActive: boolean;
+  team: 'general' | 'inbound' | 'outbound';
 }
 
 interface FormErrors {
@@ -58,6 +59,7 @@ const USER_ROLES = [
   { value: 'company_admin', label: 'Company Admin', icon: UserCog, color: 'text-red-500' },
   { value: 'company_user', label: 'Company User', icon: UserCircle, color: 'text-gray-500' },
   { value: 'transporter', label: 'Transporter' },
+  { value: 'finance', label: 'Finance Auditor' },
 ];
 
 type TabType = 'details' | 'permissions';
@@ -76,6 +78,7 @@ export function EditUserModal({ isOpen, userId, onClose, onSuccess, initialTab =
     username: '',
     role: 'company_user',
     isActive: true,
+    team: 'general',
   });
   const [originalData, setOriginalData] = useState<UserFormData>({
     email: '',
@@ -84,6 +87,7 @@ export function EditUserModal({ isOpen, userId, onClose, onSuccess, initialTab =
     username: '',
     role: 'company_user',
     isActive: true,
+    team: 'general',
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<TouchedFields>({});
@@ -114,13 +118,14 @@ export function EditUserModal({ isOpen, userId, onClose, onSuccess, initialTab =
       setLoading(true);
       const user = await usersService.getById(id);
 
-      const userData = {
+      const userData: UserFormData = {
         email: user.email || '',
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         username: user.username || '',
         role: user.role || 'company_user',
         isActive: user.isActive !== undefined ? user.isActive : true,
+        team: user.team || 'general',
       };
 
       setFormData(userData);
@@ -214,7 +219,8 @@ export function EditUserModal({ isOpen, userId, onClose, onSuccess, initialTab =
       formData.firstName !== originalData.firstName ||
       formData.lastName !== originalData.lastName ||
       formData.username !== originalData.username ||
-      formData.role !== originalData.role
+      formData.role !== originalData.role ||
+      formData.team !== originalData.team
     );
   };
 
@@ -304,12 +310,17 @@ export function EditUserModal({ isOpen, userId, onClose, onSuccess, initialTab =
   ];
 
   // Filter resources based on search
-  const filteredResources = searchPermission
+  const assignablePermissions = getAssignablePermissionsForRole(formData.role, userPermissions);
+
+  const filteredResources = (searchPermission
     ? PERMISSION_GROUPS.filter((group) => 
         group.label.toLowerCase().includes(searchPermission.toLowerCase()) ||
         group.key.toLowerCase().includes(searchPermission.toLowerCase())
       )
-    : PERMISSION_GROUPS;
+    : PERMISSION_GROUPS)
+    .filter((group) =>
+      group.permissions.some((permission) => assignablePermissions.has(permission))
+    );
 
   if (!isOpen) return null;
 
@@ -538,6 +549,30 @@ export function EditUserModal({ isOpen, userId, onClose, onSuccess, initialTab =
                     </p>
                   </div>
 
+                  {formData.role === 'company_user' && (
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2" htmlFor="edit-team">
+                        Team / Department <span className="text-destructive">*</span>
+                      </label>
+                      <select
+                        id="edit-team"
+                        name="team"
+                        value={formData.team}
+                        onChange={handleChange}
+                        onBlur={handleBlur}
+                        className="w-full px-4 py-2.5 border border-input bg-background text-foreground rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring transition-all"
+                        required
+                      >
+                        <option value="general">General (Inbound + Outbound)</option>
+                        <option value="inbound">Inbound Team</option>
+                        <option value="outbound">Outbound Team</option>
+                      </select>
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        Determines which sections and load types (inbound/outbound) this user can access
+                      </p>
+                    </div>
+                  )}
+
                   {/* Change Summary */}
                   {hasChanges() && (
                     <div className="p-4 bg-warning/10 border border-warning/20 rounded-lg">
@@ -653,7 +688,10 @@ export function EditUserModal({ isOpen, userId, onClose, onSuccess, initialTab =
                           </thead>
                           <tbody className="divide-y divide-border">
                             {filteredResources.map((group) => {
-                              const hasAll = hasAllPermissions(group.permissions);
+                              const visiblePermissions = group.permissions.filter((permission) =>
+                                assignablePermissions.has(permission)
+                              );
+                              const hasAll = hasAllPermissions(visiblePermissions);
                               
                               return (
                                 <tr key={group.key} className="hover:bg-muted/30 transition-colors">
@@ -661,6 +699,9 @@ export function EditUserModal({ isOpen, userId, onClose, onSuccess, initialTab =
                                     <span className="text-foreground font-medium text-sm">{group.label}</span>
                                   </td>
                                   {group.permissions.map((permission) => {
+                                    if (!assignablePermissions.has(permission)) {
+                                      return <td key={permission} className="px-2 py-3 text-center" />;
+                                    }
                                     const checked = hasPermission(permission);
                                     return (
                                       <td key={permission} className="px-2 py-3 text-center">
@@ -683,7 +724,7 @@ export function EditUserModal({ isOpen, userId, onClose, onSuccess, initialTab =
                                       <input
                                         type="checkbox"
                                         checked={hasAll}
-                                        onChange={() => toggleAllPermissions(group.permissions)}
+                                        onChange={() => toggleAllPermissions(visiblePermissions)}
                                         className="rounded border-input text-primary focus:ring-ring focus:ring-2 h-4 w-4"
                                       />
                                     </label>

@@ -87,13 +87,13 @@ export interface Transporter {
 // If the backend paths differ, only this service file should be updated.
 export const transportersService = {
   async list(params?: { page?: number; limit?: number; status?: string }) {
-    // expected: /admin/transporters
-    const response = await client.get<PaginationResponse<Transporter>>('/admin/transporters', { params });
+    // expected: /api/admin/transporters
+    const response = await client.get<PaginationResponse<Transporter>>('/api/admin/transporters', { params });
     return response.data;
   },
 
   async getById(id: string) {
-    const response = await client.get<{ transporter: Transporter }>(`/admin/transporters/${id}`);
+    const response = await client.get<{ transporter: Transporter }>(`/api/admin/transporters/${id}`);
     return response.data.transporter;
   },
 
@@ -122,7 +122,7 @@ export const transportersService = {
       formData.append('profilePicture', data.profilePicture);
     }
 
-    const response = await client.post<{ transporter: Transporter }>(`/admin/transporters`, formData, {
+    const response = await client.post<{ transporter: Transporter }>(`/api/admin/transporters`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -155,7 +155,7 @@ export const transportersService = {
       formData.append('profilePicture', data.profilePicture);
     }
 
-    const response = await client.put<{ transporter: Transporter }>(`/admin/transporters/${id}`, formData, {
+    const response = await client.put<{ transporter: Transporter }>(`/api/admin/transporters/${id}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -164,17 +164,17 @@ export const transportersService = {
   },
 
   async deactivate(id: string) {
-    const response = await client.patch<{ transporter: Transporter }>(`/admin/transporters/${id}/deactivate`);
+    const response = await client.patch<{ transporter: Transporter }>(`/api/admin/transporters/${id}/deactivate`);
     return response.data.transporter;
   },
 
   async delete(id: string) {
-    const response = await client.delete(`/admin/transporters/${id}`);
+    const response = await client.delete(`/api/admin/transporters/${id}`);
     return response.data;
   },
 
   async getTransporterLoads(transporterId: string, params?: { page?: number; limit?: number; status?: string }) {
-    const response = await client.get<any>(`/admin/transporters/${transporterId}/loads`, { params });
+    const response = await client.get<any>(`/api/admin/transporters/${transporterId}/loads`, { params });
     return response.data;
   },
 };

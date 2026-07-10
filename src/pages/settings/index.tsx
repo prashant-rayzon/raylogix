@@ -47,11 +47,20 @@ import {
   getMe,
   logoutAllSessions,
   revokeSession,
+  updateCompanySettings,
 } from '@/api/services/auth'
 import { toast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { useSettings, ThemeColor, GlowSystem } from '@/components/settings-provider'
 
 // ===== CONSTANTS =====
 const PASSWORD_MIN_LENGTH = 8
@@ -203,6 +212,7 @@ function SettingsSidebar({ activeTab, onTabChange }: { activeTab: string; onTabC
   
   const navItems: SettingsNavItem[] = [
     { icon: IconUserCircle, label: 'Profile', value: 'profile' },
+    { icon: IconSparkles, label: 'Appearance & Locale', value: 'appearance' },
     { icon: IconKey, label: 'Password', value: 'password' },
     { icon: IconDeviceDesktop, label: 'Sessions', value: 'sessions' },
     { icon: IconShield, label: 'Privacy', value: 'privacy' },
@@ -454,6 +464,8 @@ export default function SettingsPage() {
     switch (activeTab) {
       case 'profile':
         return renderProfileTab()
+      case 'appearance':
+        return renderAppearanceTab()
       case 'password':
         return renderPasswordTab()
       case 'sessions':
@@ -969,6 +981,202 @@ export default function SettingsPage() {
       </CardContent>
     </Card>
   )
+
+  const renderAppearanceTab = () => {
+    const {
+      themeColor,
+      setThemeColor,
+      glowSystem,
+      setGlowSystem,
+      lightLogo,
+      setLightLogo,
+      darkLogo,
+      setDarkLogo,
+      resetLogos,
+    } = useSettings()
+
+    const colors: { name: string; value: ThemeColor; class: string }[] = [
+      { name: 'Teal', value: 'teal', class: 'bg-[#005f59]' },
+      { name: 'Blue', value: 'blue', class: 'bg-[#3b82f6]' },
+      { name: 'Indigo', value: 'indigo', class: 'bg-[#6366f1]' },
+      { name: 'Purple', value: 'purple', class: 'bg-[#8b5cf6]' },
+      { name: 'Emerald', value: 'emerald', class: 'bg-[#10b981]' },
+      { name: 'Orange', value: 'orange', class: 'bg-[#f97316]' },
+    ]
+
+    const handleThemeColorSelect = async (color: ThemeColor) => {
+      setThemeColor(color)
+      try {
+        await updateCompanySettings({ themeColor: color })
+        toast({ title: 'Theme color saved to database' })
+      } catch (err: any) {
+        toast({ title: 'Failed to save to database', description: err?.response?.data?.error || err.message, variant: 'destructive' })
+      }
+    }
+
+    const handleGlowSystemSelect = async (glow: GlowSystem) => {
+      setGlowSystem(glow)
+      try {
+        await updateCompanySettings({ glowSystem: glow })
+        toast({ title: 'Glow preference saved to database' })
+      } catch (err: any) {
+        toast({ title: 'Failed to save to database', description: err?.response?.data?.error || err.message, variant: 'destructive' })
+      }
+    }
+
+    const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark') => {
+      const file = e.target.files?.[0]
+      if (!file) return
+
+      if (!file.type.startsWith('image/')) {
+        toast({ title: 'Invalid file type', description: 'Please select an image file.', variant: 'destructive' })
+        return
+      }
+
+      const reader = new FileReader()
+      reader.onload = async (event) => {
+        const base64 = event.target?.result as string
+        try {
+          if (type === 'light') {
+            setLightLogo(base64)
+            await updateCompanySettings({ lightLogo: base64 })
+            toast({ title: 'Light logo saved to database' })
+          } else {
+            setDarkLogo(base64)
+            await updateCompanySettings({ darkLogo: base64 })
+            toast({ title: 'Dark logo saved to database' })
+          }
+        } catch (err: any) {
+          toast({ title: 'Failed to save logo to database', description: err?.response?.data?.error || err.message, variant: 'destructive' })
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+
+    const handleResetLogos = async () => {
+      resetLogos()
+      try {
+        await updateCompanySettings({
+          lightLogo: '/images/logo.png',
+          darkLogo: '/images/logo.png'
+        })
+        toast({ title: 'Branding logos reset to default in database' })
+      } catch (err: any) {
+        toast({ title: 'Failed to reset logos in database', description: err?.response?.data?.error || err.message, variant: 'destructive' })
+      }
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Theme Color Card */}
+        <Card className="rounded-3xl shadow-sm overflow-hidden">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <IconSparkles className="h-5 w-5 text-primary animate-pulse" />
+              Theme Accent Color
+            </CardTitle>
+            <CardDescription>
+              Select the primary accent color for your workspace. This changes buttons, active links, and glows.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
+              {colors.map((color) => {
+                const isSelected = themeColor === color.value
+                return (
+                  <button
+                    key={color.value}
+                    onClick={() => handleThemeColorSelect(color.value)}
+                    className={cn(
+                      "flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all relative hover:scale-105 active:scale-95 duration-200",
+                      isSelected
+                        ? "border-primary bg-primary/5 shadow-md"
+                        : "border-muted bg-card hover:border-muted-foreground/30"
+                    )}
+                  >
+                    <div className={cn("h-10 w-10 rounded-full mb-2 shadow-inner", color.class)} />
+                    <span className="text-sm font-semibold">{color.name}</span>
+                    {isSelected && (
+                      <div className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-0.5">
+                        <IconCheck className="h-3 w-3" />
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* System Logo Customization Card */}
+        <Card className="rounded-3xl shadow-sm overflow-hidden">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <IconBuilding className="h-5 w-5 text-primary" />
+                System Logo Customization
+              </CardTitle>
+              <CardDescription>
+                Upload and configure the branding logos for Light and Dark themes.
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleResetLogos}>
+              Reset to Defaults
+            </Button>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Light Theme Logo */}
+              <div className="space-y-3">
+                <Label className="font-semibold text-sm">Light Theme Logo</Label>
+                <div className="border border-dashed rounded-2xl p-4 flex flex-col items-center justify-center bg-slate-50/50 hover:bg-slate-50 transition-colors h-48 relative">
+                  <div className="h-16 w-full flex items-center justify-center mb-4 p-2 bg-white rounded-lg shadow-sm border border-slate-100">
+                    <img src={lightLogo || '/images/logo.png'} alt="Light Logo Preview" className="max-h-full max-w-full object-contain" />
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleLogoUpload(e, 'light')}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    id="light-logo-input"
+                  />
+                  <span className="text-xs text-muted-foreground text-center">
+                    Drag and drop or click to upload Light Mode logo
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-1">
+                    Supports PNG, JPG, SVG, WebP
+                  </span>
+                </div>
+              </div>
+
+              {/* Dark Theme Logo */}
+              <div className="space-y-3">
+                <Label className="font-semibold text-sm">Dark Theme Logo</Label>
+                <div className="border border-dashed border-slate-700 rounded-2xl p-4 flex flex-col items-center justify-center bg-slate-900/60 hover:bg-slate-900/80 transition-colors h-48 relative">
+                  <div className="h-16 w-full flex items-center justify-center mb-4 p-2 bg-slate-950 rounded-lg shadow-sm border border-slate-800">
+                    <img src={darkLogo || '/images/logo.png'} alt="Dark Logo Preview" className="max-h-full max-w-full object-contain" />
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleLogoUpload(e, 'dark')}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    id="dark-logo-input"
+                  />
+                  <span className="text-xs text-slate-400 text-center">
+                    Drag and drop or click to upload Dark Mode logo
+                  </span>
+                  <span className="text-[10px] text-slate-500 mt-1">
+                    Supports PNG, JPG, SVG, WebP
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <Layout>

@@ -220,11 +220,6 @@ export default function AnalyticsPage() {
           <AdvancedCharts
             metrics={data.metrics}
             statusDistribution={data.statusDistribution}
-            priorityDistribution={data.priorityDistribution}
-            vehicleTypeDistribution={data.vehicleTypeDistribution}
-            totalRevenue={data.stats.totalRevenue}
-            totalLoads={data.stats.totalLoads}
-            completedLoads={data.stats.completedLoads}
           />
 
           {/* Additional Metrics */}

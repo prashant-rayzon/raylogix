@@ -266,6 +266,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Auth from Redux
   const accessToken = useAppSelector((state) => state.auth.accessToken)
+  const authUser = useAppSelector((state) => state.auth.user)
   const pushSupported = getPushSupport()
 
   const requestNotificationPermission = useCallback(async () => {
@@ -430,13 +431,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return
     }
 
+    const env = (import.meta as any)?.env || {}
     const serverUrl = (
-      (import.meta as any)?.env?.VITE_API_URL ||
-      (import.meta as any)?.env?.VITE_API_BASE ||
+      env.VITE_SOCKET_URL ||
+      env.VITE_API_URL ||
+      env.VITE_API_BASE ||
+      env.VITE_API_BASE_URL ||
       window.location.origin
     ).replace(/\/api\/?$/, '')
 
     const socket = io(serverUrl, {
+      path: '/socket.io',
       transports: ['websocket', 'polling'],
       auth: { token: accessToken },
       reconnection: true,
@@ -449,12 +454,22 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     setSocket(socket)
 
     socket.on('connect', () => {
-      socket.emit('user-join')
+      const userId = authUser?._id ?? (authUser as any)?.id
+      if (userId) {
+        socket.emit('user-join', {
+          userId,
+        })
+      } else {
+        socket.emit('user-join')
+      }
     })
 
-    socket.on('connect_error', () => {
-      // Socket disconnect/connect failures are expected during logout,
-      // token refresh, server restart, and local development reloads.
+    socket.on('connect_error', (err: any) => {
+      console.error('[NotificationContext] socket connect_error:', err)
+    })
+
+    socket.on('disconnect', (reason) => {
+      console.warn('[NotificationContext] socket disconnected:', reason)
     })
 
     socket.on('notification:new', (payload: any) => {

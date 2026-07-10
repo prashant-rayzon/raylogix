@@ -13,13 +13,11 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { LoadMetrics, LoadStatusDistribution, PriorityDistribution, VehicleTypeDistribution } from '@/api/services/dashboard'
+import { LoadMetrics, LoadStatusDistribution } from '@/api/services/dashboard'
 import { useNavigate } from 'react-router-dom'
 
 // Color palettes
-const COLORS_PRIMARY = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899']
-const COLORS_SECONDARY = ['#06b6d4', '#f97316', '#84cc16', '#d946ef', '#14b8a6']
+const COLORS_PRIMARY = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 const CHART_COLORS = {
   revenue: '#3b82f6',
   completed: '#10b981',
@@ -34,17 +32,11 @@ interface AdvancedChartsProps {
   metrics: LoadMetrics[]
   recentUnreadMessages?: any[]
   statusDistribution: LoadStatusDistribution[]
-  priorityDistribution: PriorityDistribution[]
-  vehicleTypeDistribution: VehicleTypeDistribution[]
-  totalRevenue: number
-  totalLoads: number
-  completedLoads: number
 }
 
 export function AdvancedCharts({
   metrics,
   statusDistribution,
-  priorityDistribution,
   recentUnreadMessages = [],
 }: AdvancedChartsProps) {
   const navigate = useNavigate()
@@ -69,14 +61,6 @@ export function AdvancedCharts({
     }))
   }, [statusDistribution])
 
-  const priorityData = useMemo(() => {
-    return (priorityDistribution || []).map((p) => ({
-      name: p.priority.charAt(0).toUpperCase() + p.priority.slice(1),
-      value: p.count,
-      percentage: p.percentage,
-    }))
-  }, [priorityDistribution])
-
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -94,12 +78,12 @@ export function AdvancedCharts({
 
   return (
     <div className="space-y-4">
-
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
+        {/* 7 Day Load Flow */}
+        <Card className="xl:col-span-2 border-border/40 rounded-2xl shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle>7 Day Load Flow</CardTitle>
-            <CardDescription>Completed and pending loads by day</CardDescription>
+            <CardTitle className="text-sm font-bold">7 Day Load Flow</CardTitle>
+            <CardDescription className="text-xs">Completed and pending loads by day</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={235}>
@@ -116,123 +100,83 @@ export function AdvancedCharts({
           </CardContent>
         </Card>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Recent Messages</CardTitle>
-              <CardDescription>Latest transporter communication</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {recentUnreadMessages?.length ? (
-                <div className="space-y-2">
-                  {recentUnreadMessages.slice(0, 3).map((message:any, index:any) => (
-                    <button
-                      key={`${message.senderId}-${message.timestamp}-${index}`}
-                      type="button"
-                      className="w-full rounded-xl border p-3 text-left transition-colors hover:bg-muted/60"
-                      onClick={() => navigate(`/chats?userId=${message.senderId}`)}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-medium">{message.senderName}</p>
-                        <span className="shrink-0 text-[10px] text-muted-foreground">
-                          {new Date(message.timestamp).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{message.content}</p>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed p-4 text-center">
-                  <p className="mt-2 text-sm font-medium">No unread messages</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <Card>
+        {/* Status Distribution */}
+        <Card className="xl:col-span-1 border-border/40 rounded-2xl shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle>Status Distribution</CardTitle>
-            <CardDescription>Current load status breakdown</CardDescription>
+            <CardTitle className="text-sm font-bold">Status Distribution</CardTitle>
+            <CardDescription className="text-xs">Current load status breakdown</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)] md:items-center">
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={48}
-                  outerRadius={74}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {statusData.map((_entry: any, index: any) => (
-                    <Cell key={`status-cell-${index}`} fill={COLORS_PRIMARY[index % COLORS_PRIMARY.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: any) => value.toLocaleString()} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-2">
+          <CardContent className="flex flex-col justify-between h-[235px] pt-0">
+            <div className="flex justify-center items-center h-[120px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={32}
+                    outerRadius={52}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {statusData.map((_entry: any, index: any) => (
+                      <Cell key={`status-cell-${index}`} fill={COLORS_PRIMARY[index % COLORS_PRIMARY.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: any) => value.toLocaleString()} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2 max-h-[100px] overflow-y-auto pr-1">
               {statusData.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-2 text-sm">
-                  <div className="flex min-w-0 items-center gap-2">
+                <div key={idx} className="flex items-center justify-between rounded-lg bg-muted/40 px-2 py-1 text-[11px]">
+                  <div className="flex min-w-0 items-center gap-1.5">
                     <div
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      className="h-2 w-2 shrink-0 rounded-full"
                       style={{ backgroundColor: COLORS_PRIMARY[idx % COLORS_PRIMARY.length] }}
                     />
-                    <span className="truncate">{item.name}</span>
+                    <span className="truncate font-medium">{item.name}</span>
                   </div>
-                  <Badge variant="secondary">{item.value}</Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle>Priority Distribution</CardTitle>
-            <CardDescription>Where admin attention is needed</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)] md:items-center">
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie
-                  data={priorityData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={48}
-                  outerRadius={74}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {priorityData.map((_entry, index) => (
-                    <Cell key={`priority-cell-${index}`} fill={COLORS_SECONDARY[index % COLORS_SECONDARY.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => value.toLocaleString()} />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="space-y-2">
-              {priorityData.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between rounded-lg bg-muted/50 px-2.5 py-2 text-sm">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <div
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: COLORS_SECONDARY[idx % COLORS_SECONDARY.length] }}
-                    />
-                    <span className="truncate">{item.name}</span>
-                  </div>
-                  <Badge variant="secondary">{item.value}</Badge>
+                  <span className="font-bold text-muted-foreground">{item.value}</span>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Messages */}
+      <Card className="border-border/40 rounded-2xl shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold">Recent Messages</CardTitle>
+          <CardDescription className="text-xs">Latest transporter communication feed</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-2">
+          {recentUnreadMessages?.length ? (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {recentUnreadMessages.slice(0, 3).map((message: any, index: number) => (
+                <div
+                  key={`${message.senderId}-${message.timestamp}-${index}`}
+                  onClick={() => navigate(`/chats?userId=${message.senderId}`)}
+                  className="rounded-xl border border-border/50 p-4 transition-all hover:scale-[1.01] hover:border-primary/20 hover:shadow-sm cursor-pointer bg-card flex flex-col justify-between"
+                >
+                  <div className="flex items-center justify-between gap-2 border-b border-dashed border-border/30 pb-2">
+                    <p className="truncate text-xs font-bold text-foreground">{message.senderName}</p>
+                    <span className="shrink-0 text-[9px] text-muted-foreground">
+                      {new Date(message.timestamp).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p className="mt-2.5 line-clamp-2 text-xs text-muted-foreground leading-relaxed">{message.content}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed p-6 text-center">
+              <p className="text-xs text-muted-foreground">No recent messages</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

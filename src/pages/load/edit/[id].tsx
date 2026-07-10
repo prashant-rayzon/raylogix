@@ -22,15 +22,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/components/ui/use-toast'
 
 import { getAuthStore } from '@/lib/auth'
+import { getApiErrorMessage } from '@/lib/api-error'
 import { load as loadApi } from '@/api/services'
 import type { Load } from '@/api/services/load/loads.service'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 
 const schema = z.object({
   pickupDate: z.string().optional(),
   deliveryDate: z.string().optional(),
-  specialRequirements: z.string().optional(),
+  tat: z.string().optional(),
   notes: z.string().optional(),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional(),
 })
 
 type FormData = z.infer<typeof schema>
@@ -46,6 +47,29 @@ function toDatetimeLocal(v?: string | Date | null) {
   const hh = pad(d.getHours())
   const min = pad(d.getMinutes())
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`
+}
+
+function parseTatDays(tatValue?: string) {
+  const normalizedTat = tatValue?.trim()
+  if (!normalizedTat) return null
+  const tatDays = Number(normalizedTat)
+  if (!Number.isFinite(tatDays) || tatDays <= 0) return null
+  return tatDays
+}
+
+function getCurrentDatetimeLocal() {
+  const now = new Date()
+  const tzOffsetMs = now.getTimezoneOffset() * 60000
+  return new Date(now.getTime() - tzOffsetMs).toISOString().slice(0, 16)
+}
+
+function calculateDeliveryDatetimeLocal(pickupDate?: string, tatValue?: string) {
+  if (!pickupDate) return ''
+  const tatDays = parseTatDays(tatValue)
+  if (!tatDays) return ''
+  const pickup = new Date(pickupDate)
+  if (Number.isNaN(pickup.getTime())) return ''
+  return new Date(pickup.getTime() + tatDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
 }
 
 export default function EditLoad() {
@@ -65,9 +89,8 @@ export default function EditLoad() {
     defaultValues: {
       pickupDate: '',
       deliveryDate: '',
-      specialRequirements: '',
+      tat: '',
       notes: '',
-      priority: undefined,
     },
   })
 
@@ -84,13 +107,12 @@ export default function EditLoad() {
         form.reset({
           pickupDate: toDatetimeLocal(res.data.load.pickupDate),
           deliveryDate: toDatetimeLocal(res.data.load.deliveryDate),
-          specialRequirements: (res.data.load as any).specialRequirements || '',
+          tat: String((res.data.load as any).tat || ''),
           notes: (res.data.load as any).notes || '',
-          priority: (res.data.load as any).priority,
         })
       } catch (e: any) {
         if (!mounted) return
-        setError(e?.message || 'Failed to load')
+        setError(getApiErrorMessage(e, 'Failed to load'))
       } finally {
         if (mounted) setLoading(false)
       }
@@ -105,27 +127,61 @@ export default function EditLoad() {
   const canEdit = useMemo(() => {
     if (!load) return false
     // backend allows update only if Load.status === 'open'
-    return role === 'company_admin' && load.status === 'open'
+    return (role === 'company_admin' || role === 'company_user') && load.status === 'open'
   }, [load, role])
+
+  const pickupDate = form.watch('pickupDate')
+  const tat = form.watch('tat')
+
+  useEffect(() => {
+    const deliveryDate = calculateDeliveryDatetimeLocal(pickupDate, tat)
+    form.setValue('deliveryDate', deliveryDate, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: false,
+    })
+  }, [form, pickupDate, tat])
 
   const onSubmit = async (data: FormData) => {
     if (!id) return
     try {
+      if (!data.pickupDate) {
+        toast({ title: 'Validation Error', description: 'Loading date is required', variant: 'destructive' })
+        return
+      }
+      if (new Date(data.pickupDate).getTime() < Date.now()) {
+        toast({ title: 'Validation Error', description: 'Loading date cannot be in the past', variant: 'destructive' })
+        return
+      }
+      if (!data.tat?.trim()) {
+        toast({ title: 'Validation Error', description: 'TAT (Days) is required', variant: 'destructive' })
+        return
+      }
+      if (!parseTatDays(data.tat)) {
+        toast({ title: 'Validation Error', description: 'TAT (Days) must be greater than 0', variant: 'destructive' })
+        return
+      }
+
+      const calculatedDeliveryDate = calculateDeliveryDatetimeLocal(data.pickupDate, data.tat)
+      if (!calculatedDeliveryDate) {
+        toast({ title: 'Validation Error', description: 'Delivery date could not be calculated from Loading Date and TAT', variant: 'destructive' })
+        return
+      }
+
       setLoading(true)
       const payload: any = {
-        specialRequirements: data.specialRequirements || undefined,
+        tat: data.tat.trim(),
+        deliveryDate: new Date(calculatedDeliveryDate).toISOString(),
         notes: data.notes || undefined,
-        priority: data.priority || undefined,
       }
 
       if (data.pickupDate) payload.pickupDate = new Date(data.pickupDate).toISOString()
-      if (data.deliveryDate) payload.deliveryDate = new Date(data.deliveryDate).toISOString()
 
       await loadApi.updateLoad(id, payload)
       toast({ title: 'Load updated', description: 'Changes saved successfully.' })
       navigate('/load')
     } catch (e: any) {
-      toast({ title: 'Update failed', description: e?.message || 'Unknown error', variant: 'destructive' })
+      toast({ title: 'Update failed', description: getApiErrorMessage(e, 'Unknown error'), variant: 'destructive' })
     } finally {
       setLoading(false)
     }
@@ -182,21 +238,27 @@ export default function EditLoad() {
             <CardContent>
               {!canEdit && (
                 <div className="mb-4 text-sm text-muted-foreground">
-                  Edit is restricted. Only <span className="font-medium">company_admin</span> can edit loads while status is <span className="font-medium">open</span>.
+                  Edit is restricted. Only company-side users can edit loads while status is <span className="font-medium">open</span>.
                 </div>
               )}
 
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField
                       control={form.control}
                       name="pickupDate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Pickup Date & Time</FormLabel>
+                          <FormLabel>Loading Date</FormLabel>
                           <FormControl>
-                            <Input type="datetime-local" {...field} disabled={!canEdit || loading} />
+                            <DateTimePicker
+                              value={field.value}
+                              onChange={field.onChange}
+                              min={getCurrentDatetimeLocal()}
+                              disabled={!canEdit || loading}
+                              placeholder="Select loading date"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -204,41 +266,12 @@ export default function EditLoad() {
                     />
                     <FormField
                       control={form.control}
-                      name="deliveryDate"
+                      name="tat"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Delivery Date & Time</FormLabel>
+                          <FormLabel>TAT (Days)</FormLabel>
                           <FormControl>
-                            <Input type="datetime-local" {...field} disabled={!canEdit || loading} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="priority"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Priority</FormLabel>
-                          <FormControl>
-                            <Input {...field} disabled={!canEdit || loading} placeholder="low/medium/high/urgent" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="specialRequirements"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Special Requirements</FormLabel>
-                          <FormControl>
-                            <Input {...field} disabled={!canEdit || loading} placeholder="Any special requirements" />
+                            <Input type="number" min={1} step={1} {...field} disabled={!canEdit || loading} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

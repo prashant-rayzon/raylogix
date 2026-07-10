@@ -16,7 +16,7 @@ export const companiesService = {
   // Create new company (super_admin only)
   async create(data: CreateCompanyRequest) {
     const response = await client.post<{ company: Company; admin: AuthUser }>(
-      '/super-admin/companies',
+      '/api/super-admin/companies',
       data
     );
     return response.data;
@@ -25,7 +25,7 @@ export const companiesService = {
   // List all companies (super_admin only)
   async list(params?: { page?: number; limit?: number; isActive?: boolean }) {
     const response = await client.get<PaginationResponse<Company> | { companies: Company[]; pagination: PaginationResponse<Company>['pagination'] }>(
-      '/super-admin/companies',
+      '/api/super-admin/companies',
       { params }
     );
     const body: any = response.data;
@@ -37,14 +37,14 @@ export const companiesService = {
 
   // Get company by ID
   async getById(id: string) {
-    const response = await client.get<Company>(`/super-admin/companies/${id}`);
+    const response = await client.get<Company>(`/api/super-admin/companies/${id}`);
     return response.data;
   },
 
   // Update company
   async update(id: string, data: Partial<Company>) {
     const response = await client.put<{ company: Company }>(
-      `/super-admin/companies/${id}`,
+      `/api/super-admin/companies/${id}`,
       data
     );
     return response.data.company;
@@ -53,7 +53,7 @@ export const companiesService = {
   // Toggle company active status
   async toggle(id: string) {
     const response = await client.patch<{ company: Company }>(
-      `/super-admin/companies/${id}/toggle`
+      `/api/super-admin/companies/${id}/toggle`
     );
     return response.data.company;
   },

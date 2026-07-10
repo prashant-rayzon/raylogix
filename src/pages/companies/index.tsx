@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { IconBuilding, IconLoader2, IconPlus, IconRefresh } from '@tabler/icons-react'
+import { IconBuilding, IconPlus, IconRefresh } from '@tabler/icons-react'
 import { Layout } from '@/components/custom/layout'
 import { Button } from '@/components/custom/button'
+import { LoaderIcon, SectionLoader } from '@/components/loader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import ThemeSwitch from '@/components/theme-switch'
@@ -131,10 +132,7 @@ export default function CompaniesPage() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="flex items-center justify-center py-12 text-muted-foreground">
-                  <IconLoader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Loading companies...
-                </div>
+                <SectionLoader label="Loading companies..." />
               ) : companies.length === 0 ? (
                 <div className="rounded-xl border border-dashed py-12 text-center">
                   <IconBuilding className="mx-auto h-10 w-10 text-muted-foreground/50" />
@@ -174,7 +172,7 @@ export default function CompaniesPage() {
                           disabled={togglingId === company._id}
                           onClick={() => handleToggle(company)}
                         >
-                          {togglingId === company._id ? 'Saving...' : company.isActive ? 'Disable' : 'Activate'}
+                          {togglingId === company._id ? <><LoaderIcon className="mr-2" />Saving...</> : company.isActive ? 'Disable' : 'Activate'}
                         </Button>
                       </div>
                     </div>

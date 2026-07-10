@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+﻿import { ReactNode } from 'react'
 import { useSelector } from 'react-redux'
 import { Navigate } from 'react-router-dom'
 import type { RootState } from '@/store'
@@ -11,6 +11,7 @@ interface ProtectedRouteProps {
   requiredPermissions?: string[] // All permissions required
   requiredAnyPermission?: string[] // Any of these permissions required
   requiredRole?: string
+  requiredRoles?: string[]
   requireAdmin?: boolean
   fallbackPath?: string
 }
@@ -58,26 +59,29 @@ export const ProtectedRoute = ({
   requiredPermissions,
   requiredAnyPermission,
   requiredRole,
+  requiredRoles,
   requireAdmin,
 }: ProtectedRouteProps) => {
   const user = useSelector((state: RootState) => state.auth.user)
 
-  // Check admin requirement
+  // // Check admin requirement
   if (requireAdmin && !isAdmin(user)) {
     return <GeneralError />
   }
 
-  // Check role requirement
+  // // Check role requirement
   if (requiredRole && user?.role !== requiredRole) {
     return <GeneralError />
   }
 
-  // Check single permission
+  if (requiredRoles && (!user?.role || !requiredRoles.includes(user.role))) {
+    return <GeneralError />
+  }
+
   if (requiredPermission && !hasPermission(user, requiredPermission)) {
     return <GeneralError />
   }
 
-  // Check all permissions
   if (requiredPermissions) {
     const hasAll = requiredPermissions.every((perm) => hasPermission(user, perm))
     if (!hasAll) {
@@ -151,3 +155,4 @@ export const SuperAdminGate = ({
 
   return children
 }
+

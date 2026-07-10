@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 
 import { chatSocket } from '../socket/chatSocket';
-import { ChatUser, Message, ReplyTo } from '../../../api/schema';
+import { ChatUser, Message, ReplyTo } from '@/api/schema';
 import { getAuthStore } from '@/lib/auth';
 import * as conversationApi from '@/api/services/chat/conversations.service';
 import * as messageApi from '@/api/services/chat/messages.service';
@@ -33,6 +33,7 @@ export function useChat() {
   const hasMoreRef = useRef<Record<string, boolean>>({});        // userId -> hasMore flag
   const loadingMoreRef = useRef(false);
   const selectedUserIdRef = useRef<string | null>(null);
+  const activeConversationKeyRef = useRef<string | null>(null);
   const meUserIdRef = useRef('');
   const isMounted = useRef(true);
   const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -411,11 +412,20 @@ export function useChat() {
   }, []);
 
   // ─── Trigger load when selected user changes ────────────────────────
+  const selectedUserId = selectedUser ? norm(selectedUser.id) : '';
+  const selectedConversationId = selectedUser?.conversationId ? norm(selectedUser.conversationId) : '';
+
   useEffect(() => {
     if (selectedUser && meUserId) {
-      const uid = norm(selectedUser.id);
-      const chatKey = selectedUser.conversationId ? norm(selectedUser.conversationId) : uid;
+      const uid = selectedUserId;
+      const chatKey = selectedConversationId || uid;
       selectedUserIdRef.current = chatKey;
+
+      if (activeConversationKeyRef.current === chatKey) {
+        return;
+      }
+
+      activeConversationKeyRef.current = chatKey;
 
       // Reset pagination state for this conversation
       resetConversation(chatKey);
@@ -425,14 +435,15 @@ export function useChat() {
         (u.conversationId ? norm(u.conversationId) : norm(u.id)) === chatKey ? { ...u, unreadCount: 0 } : u
       ));
 
-      // Load messages
+      // Load messages only when the actual conversation changes
       loadMessages(uid, { resetCache: true, conversationId: selectedUser.conversationId });
     } else {
+      activeConversationKeyRef.current = null;
       selectedUserIdRef.current = null;
       setSelectedUserMessages([]);
       setHasMore(false);
     }
-  }, [selectedUser, meUserId, norm, loadMessages, resetConversation]);
+  }, [selectedUser, meUserId, norm, loadMessages, resetConversation, selectedConversationId, selectedUserId]);
 
   // ─── Socket event listeners ─────────────────────────────────────────
   useEffect(() => {

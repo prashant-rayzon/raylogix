@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'company_admin' | 'company_user' | 'transporter';
+﻿export type UserRole = 'super_admin' | 'company_admin' | 'company_user' | 'transporter' | 'finance';
 
 export interface BranchDetails {
   id: string;
@@ -38,6 +38,7 @@ export interface AuthUser {
   tenantName?: string;
   branchId?: string | null;
   operationalRole?: 'none' | 'branch_manager' | 'watchman' | 'inspection_officer';
+  team?: 'general' | 'inbound' | 'outbound';
   branch?: BranchDetails | null;
   accessLevel?: AccessLevel;
   isActive: boolean;
@@ -57,6 +58,36 @@ export interface Company {
   maxTransporters?: number;
   isActive: boolean;
   userCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MasterGroup {
+  _id: string;
+  name: string;
+  code: string;
+  description?: string;
+  status: 'active' | 'inactive';
+  masterCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Master {
+  _id: string;
+  groupId:
+    | string
+    | {
+        _id: string;
+        name: string;
+        code: string;
+        status: 'active' | 'inactive';
+      };
+  name: string;
+  code: string;
+  value?: string;
+  description?: string;
+  status: 'active' | 'inactive';
   createdAt: string;
   updatedAt: string;
 }
@@ -250,3 +281,4 @@ export interface Trip {
   estimatedTime: number
   createdAt: string
 }
+

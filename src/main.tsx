@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { ThemeProvider } from '@/components/theme-provider'
+import { SettingsProvider } from '@/components/settings-provider'
 import router from '@/router'
 import '@/index.css'
 
@@ -25,17 +26,17 @@ if ('serviceWorker' in navigator) {
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ThemeProvider defaultTheme='light' storageKey='vite-ui-theme'>
-      <ReduxProvider>
+  <ThemeProvider defaultTheme='light' storageKey='vite-ui-theme'>
+    <ReduxProvider>
+      <SettingsProvider>
         <BranchProvider>
           <NotificationProvider>
             <RouterProvider router={router} />
             <Toaster />
           </NotificationProvider>
         </BranchProvider>
-      </ReduxProvider>
-    </ThemeProvider>
-  </React.StrictMode>
+      </SettingsProvider>
+    </ReduxProvider>
+  </ThemeProvider>
 )
 

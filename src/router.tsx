@@ -1,6 +1,5 @@
 import { createBrowserRouter } from 'react-router-dom'
-import GeneralError from './pages/errors/general-error'
-
+import { PageLoader } from '@/components/loader'
 import RedirectIfAuth from '@/components/redirect-if-auth'
 import RequireAuth from '@/components/require-auth'
 import { ProtectedRoute } from '@/components/route-guards'
@@ -9,6 +8,7 @@ import { ALL_PERMISSIONS } from '@/lib/permissions'
 const router = createBrowserRouter([
   {
     path: '/',
+    HydrateFallback: () => <PageLoader label='Loading page...' />,
     lazy: async () => {
       const { default: AppShell } = await import('./components/app-shell')
       return {
@@ -19,8 +19,8 @@ const router = createBrowserRouter([
         ),
       }
     },
-    errorElement: <GeneralError />,
     children: [
+      // ─── Dashboard ─────────────────────────────────────────────────────────
       {
         index: true,
         lazy: async () => ({
@@ -34,6 +34,14 @@ const router = createBrowserRouter([
         }),
       },
       {
+        path: 'analytics',
+        lazy: async () => ({
+          Component: (await import('@/pages/dashboard/analytics')).default,
+        }),
+      },
+
+      // ─── Companies (super_admin) ────────────────────────────────────────────
+      {
         path: 'companies',
         children: [
           {
@@ -42,7 +50,7 @@ const router = createBrowserRouter([
               const { default: Component } = await import('@/pages/companies')
               return {
                 Component: () => (
-                  <ProtectedRoute requiredPermission={ALL_PERMISSIONS.COMPANY_READ}>
+                  <ProtectedRoute requiredRole='super_admin' requiredPermission={ALL_PERMISSIONS.COMPANY_READ}>
                     <Component />
                   </ProtectedRoute>
                 ),
@@ -55,7 +63,27 @@ const router = createBrowserRouter([
               const { default: Component } = await import('@/pages/companies/create')
               return {
                 Component: () => (
-                  <ProtectedRoute requiredPermission={ALL_PERMISSIONS.COMPANY_CREATE}>
+                  <ProtectedRoute requiredRole='super_admin' requiredPermission={ALL_PERMISSIONS.COMPANY_CREATE}>
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+        ],
+      },
+
+      // ─── Masters ───────────────────────────────────────────────────────────
+      {
+        path: 'master-groups',
+        children: [
+          {
+            index: true,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/master-groups')
+              return {
+                Component: () => (
+                  <ProtectedRoute requiredRoles={['super_admin', 'company_admin']} requiredPermission={ALL_PERMISSIONS.MASTER_GROUP_READ}>
                     <Component />
                   </ProtectedRoute>
                 ),
@@ -65,50 +93,32 @@ const router = createBrowserRouter([
         ],
       },
       {
-        path: 'analytics',
-        lazy: async () => ({
-          Component: (await import('@/pages/dashboard/analytics')).default,
-        }),
+        path: 'masters',
+        children: [
+          {
+            index: true,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/masters')
+              return {
+                Component: () => (
+                  <ProtectedRoute requiredRoles={['super_admin', 'company_admin']} requiredPermission={ALL_PERMISSIONS.MASTER_READ}>
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+        ],
       },
+
+      // ─── Communication ─────────────────────────────────────────────────────
       {
         path: 'chats',
-        lazy: async () => ({
-          Component: (await import('@/pages/chats')).default,
-        }),
-      },
-      {
-        path: 'branches',
         lazy: async () => {
-          const { default: Component } = await import('@/pages/branches')
+          const { default: Component } = await import('@/pages/chats')
           return {
             Component: () => (
-              <ProtectedRoute requiredPermission={ALL_PERMISSIONS.BRANCH_READ}>
-                <Component />
-              </ProtectedRoute>
-            ),
-          }
-        },
-      },
-      {
-        path: 'transport-requests/outbound',
-        lazy: async () => {
-          const { default: Component } = await import('@/pages/branches')
-          return {
-            Component: () => (
-              <ProtectedRoute requiredPermission={ALL_PERMISSIONS.BRANCH_READ}>
-                <Component />
-              </ProtectedRoute>
-            ),
-          }
-        },
-      },
-      {
-        path: 'transport-requests/inbound',
-        lazy: async () => {
-          const { default: Component } = await import('@/pages/branches')
-          return {
-            Component: () => (
-              <ProtectedRoute requiredPermission={ALL_PERMISSIONS.BRANCH_READ}>
+              <ProtectedRoute requiredPermission={ALL_PERMISSIONS.CHAT_READ}>
                 <Component />
               </ProtectedRoute>
             ),
@@ -121,19 +131,56 @@ const router = createBrowserRouter([
           Component: (await import('@/pages/notifications')).default,
         }),
       },
+
+      // ─── Branches ──────────────────────────────────────────────────────────
       {
-        path: 'activity-log',
+        path: 'branches',
         lazy: async () => {
-          const { default: Component } = await import('@/pages/activity-log')
+          const { default: Component } = await import('@/pages/branches')
           return {
             Component: () => (
-              // <ProtectedRoute requiredPermission={ALL_PERMISSIONS.AUDIT_VIEW}>
+              <ProtectedRoute requiredRoles={['super_admin', 'company_admin']} requiredPermission={ALL_PERMISSIONS.BRANCH_READ}>
                 <Component />
-              // </ProtectedRoute>
+              </ProtectedRoute>
             ),
           }
         },
       },
+
+      // ─── Transport Requests — Outbound & Inbound Vehicle Flow ──────────────
+      {
+        path: 'transport-requests',
+        children: [
+          {
+            path: 'outbound',
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/transport-requests/outbound')
+              return {
+                Component: () => (
+                  <ProtectedRoute requiredPermission={ALL_PERMISSIONS.BRANCH_READ}>
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+          {
+            path: 'inbound',
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/transport-requests/inbound')
+              return {
+                Component: () => (
+                  <ProtectedRoute requiredPermission={ALL_PERMISSIONS.BRANCH_READ}>
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+        ],
+      },
+
+      // ─── Emails ────────────────────────────────────────────────────────────
       {
         path: 'emails',
         children: [
@@ -151,7 +198,114 @@ const router = createBrowserRouter([
           },
         ],
       },
-      // USER MANAGEMENT - Requires admin
+
+      // ─── Audit / Activity Log ──────────────────────────────────────────────
+      {
+        path: 'activity-log',
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/activity-log')
+          return {
+            Component: () => (
+              <ProtectedRoute requiredPermission={ALL_PERMISSIONS.AUDIT_VIEW}>
+                <Component />
+              </ProtectedRoute>
+            ),
+          }
+        },
+      },
+
+      // ─── Reports ────────────────────────────────────────────────────────────
+      {
+        path: 'reports',
+        children: [
+          {
+            index: true,
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/reports')
+              return {
+                Component: () => (
+                  <ProtectedRoute
+                    requiredAnyPermission={[
+                      ALL_PERMISSIONS.REPORT_VIEW,
+                      ALL_PERMISSIONS.AUDIT_VIEW,
+                      ALL_PERMISSIONS.BILLING_VIEW,
+                    ]}
+                  >
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+          {
+            path: 'billing',
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/reports/billing')
+              return {
+                Component: () => (
+                  <ProtectedRoute requiredPermission={ALL_PERMISSIONS.BILLING_VIEW}>
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+          {
+            path: 'audit',
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/reports/audit')
+              return {
+                Component: () => (
+                  <ProtectedRoute requiredPermission={ALL_PERMISSIONS.AUDIT_VIEW}>
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+          {
+            path: 'savings',
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/reports/saving')
+              return {
+                Component: () => (
+                  <ProtectedRoute requiredPermission={ALL_PERMISSIONS.REPORT_VIEW}>
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+          {
+            path: 'vendors',
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/reports/vendor')
+              return {
+                Component: () => (
+                  <ProtectedRoute requiredPermission={ALL_PERMISSIONS.REPORT_VIEW}>
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+          {
+            path: 'allotments',
+            lazy: async () => {
+              const { default: Component } = await import('@/pages/reports/allotment')
+              return {
+                Component: () => (
+                  <ProtectedRoute requiredPermission={ALL_PERMISSIONS.REPORT_VIEW}>
+                    <Component />
+                  </ProtectedRoute>
+                ),
+              }
+            },
+          },
+        ],
+      },
+
+      // ─── User Management ───────────────────────────────────────────────────
       {
         path: 'users',
         children: [
@@ -168,10 +322,10 @@ const router = createBrowserRouter([
               }
             },
           },
-
         ],
       },
-      // TRANSPORTER MANAGEMENT - Requires admin
+
+      // ─── Transporter Management ────────────────────────────────────────────
       {
         path: 'transporters',
         children: [
@@ -181,10 +335,13 @@ const router = createBrowserRouter([
               const { default: Component } = await import('@/pages/transporters')
               return {
                 Component: () => (
-                  <ProtectedRoute requiredAnyPermission={[
-                    ALL_PERMISSIONS.TRANSPORTER_READ,
-                    ALL_PERMISSIONS.TRANSPORTER_WRITE
-                  ]}>
+                  <ProtectedRoute
+                    requiredRoles={['super_admin', 'company_admin']}
+                    requiredAnyPermission={[
+                      ALL_PERMISSIONS.TRANSPORTER_READ,
+                      ALL_PERMISSIONS.TRANSPORTER_WRITE,
+                    ]}
+                  >
                     <Component />
                   </ProtectedRoute>
                 ),
@@ -193,7 +350,8 @@ const router = createBrowserRouter([
           },
         ],
       },
-      // LOAD MANAGEMENT - Role-based access
+
+      // ─── Load Management ───────────────────────────────────────────────────
       {
         path: 'load',
         children: [
@@ -265,14 +423,61 @@ const router = createBrowserRouter([
         ],
       },
 
+      // ─── Settings ──────────────────────────────────────────────────────────
       {
         path: 'settings',
         lazy: async () => ({
           Component: (await import('@/pages/settings')).default,
         }),
       },
+
+      // ─── Billing Verification (finance role) ─────────────────────────
+      {
+        path: 'billing',
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/billing')
+          return {
+            Component: () => (
+              <ProtectedRoute requiredAnyPermission={['billing.read', 'billing.verify', ALL_PERMISSIONS.BILLING_VIEW]}>
+                <Component />
+              </ProtectedRoute>
+            ),
+          }
+        },
+      },
+
+      // ─── Freight Rate Master ──────────────────────────────────────
+      {
+        path: 'freight-rates',
+        lazy: async () => {
+          const { default: Component } = await import('@/pages/freight-rates')
+          return {
+            Component: () => (
+              <ProtectedRoute requiredAnyPermission={[ALL_PERMISSIONS.MASTER_READ, 'billing.read']}>
+                <Component />
+              </ProtectedRoute>
+            ),
+          }
+        },
+      },
+      // ─── FASTag Toll Tracking (static, must come before :id) ──────────────
+      {
+        path: 'tracking/fastag',
+        lazy: async () => ({
+          Component: (await import('@/pages/tracking/fastag')).default,
+        }),
+      },
+      // ─── Sim-based Live Tracking ───────────────────────────────────────────
+      {
+        path: 'tracking/:id',
+        lazy: async () => ({
+          Component: (await import('@/pages/tracking')).default,
+        }),
+      },
     ],
   },
+
+  // ─── Auth routes (unauthenticated) ─────────────────────────────────────────
   {
     path: '/sign-in-2',
     lazy: async () => {

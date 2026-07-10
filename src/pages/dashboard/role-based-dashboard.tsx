@@ -3,6 +3,7 @@ import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import { RootState } from '@/store'
 import { Layout } from '@/components/custom/layout'
+import { PageLoader } from '@/components/loader'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/custom/button'
@@ -17,6 +18,9 @@ import {
   IconCheck,
   IconChartLine,
   IconRefresh,
+  IconReceipt2,
+  IconCategory,
+  IconDashboard,
 } from '@tabler/icons-react'
 import { dashboardService, type DashboardData } from '@/api/services/dashboard'
 import { cn } from '@/lib/utils'
@@ -26,7 +30,7 @@ import { AdvancedCharts } from '@/components/dashboard/AdvancedCharts'
 import { useNotifications } from '@/contexts/NotificationContext'
 
 // Type definitions
-type DashboardRole = 'super_admin' | 'company_admin' | 'company_user' | 'transporter'
+type DashboardRole = 'super_admin' | 'company_admin' | 'company_user' | 'transporter' | 'finance'
 type DashboardComponentProps = {
   data: DashboardData
   onRefresh?: () => void
@@ -47,9 +51,14 @@ const getStatusBadgeClass = (status: string) =>
   )
 
 const getStatusLabel = (status: string) =>
-  status
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+  ({
+    open: 'Open',
+    assigned: 'Pending',
+    in_transit: 'Pending',
+    delivered: 'Delivered',
+    canceled: 'Cancelled',
+    cancelled: 'Cancelled',
+  }[status] || status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()))
 
 const getPriorityBadgeClass = (priority?: string) =>
   cn(
@@ -75,20 +84,23 @@ interface StatCardProps {
 const StatCard = ({ title, value, icon, subtitle, valueColor = 'default' }: StatCardProps) => {
   const colorClasses = {
     default: 'text-foreground',
-    green: 'text-green-600',
-    blue: 'text-blue-600',
-    purple: 'text-purple-600',
+    green: 'text-emerald-600 dark:text-emerald-400',
+    blue: 'text-blue-600 dark:text-blue-400',
+    purple: 'text-indigo-600 dark:text-indigo-400',
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        {icon}
+    <Card className="relative overflow-hidden rounded-2xl border border-border/50 bg-card/70 backdrop-blur-md shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md hover:border-primary/20">
+      <div className="absolute -right-6 -top-6 h-20 w-20 rounded-full bg-primary/5 blur-xl" />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{title}</CardTitle>
+        <div className="rounded-xl bg-primary/10 p-2 text-primary dark:bg-primary/20">
+          {icon}
+        </div>
       </CardHeader>
-      <CardContent>
-        <div className={`text-2xl font-bold ${colorClasses[valueColor]}`}>{value}</div>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      <CardContent className="space-y-1">
+        <div className={`text-2xl font-extrabold tracking-tight ${colorClasses[valueColor]}`}>{value}</div>
+        <p className="text-xs text-muted-foreground font-medium">{subtitle}</p>
       </CardContent>
     </Card>
   )
@@ -104,26 +116,28 @@ interface SectionHeaderProps {
 }
 
 const SectionHeader = ({ title, subtitle, actionLabel, actionHref, onRefresh }: SectionHeaderProps) => (
-  <div className="flex items-center justify-between">
+  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2">
     <div>
-      <h2 className="text-lg font-semibold">{title}</h2>
-      <p className="text-sm text-muted-foreground">{subtitle}</p>
+      <h2 className="text-base font-bold tracking-tight">{title}</h2>
+      <p className="text-xs text-muted-foreground">{subtitle}</p>
     </div>
-    <div className="flex gap-2">
+    <div className="flex items-center gap-2">
       {onRefresh && (
         <Button
           variant="outline"
           size="sm"
           onClick={onRefresh}
+          className="h-8 rounded-lg text-xs"
           title="Refresh data"
         >
-          <IconRefresh className="h-4 w-4" />
+          <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
+          Refresh
         </Button>
       )}
       {actionLabel && actionHref && (
-        <Button asChild variant="outline" size="sm">
+        <Button asChild variant="outline" size="sm" className="h-8 rounded-lg text-xs">
           <a href={actionHref}>
-            <IconChartLine className="h-4 w-4 mr-2" />
+            <IconChartLine className="h-3.5 w-3.5 mr-1.5" />
             {actionLabel}
           </a>
         </Button>
@@ -138,6 +152,7 @@ const getCompletionPercentage = (completed: number, total: number): number => {
 }
 
 // SuperAdminDashboard
+// SuperAdminDashboard
 const SuperAdminDashboard = ({ data, onRefresh }: DashboardComponentProps) => {
   const navigate = useNavigate()
   const platform = data.platform
@@ -151,25 +166,29 @@ const SuperAdminDashboard = ({ data, onRefresh }: DashboardComponentProps) => {
   const activeRate = getCompletionPercentage(activeCompanies, totalCompanies)
 
   return (
-    <div className="space-y-6">
-      <div className="overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-background to-background p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Premium Header Banner */}
+      <div className="relative overflow-hidden rounded-[1.75rem] border border-border/40 bg-gradient-to-r from-primary/10 via-primary/5 to-background p-6 shadow-sm">
+        <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <Badge variant="secondary" className="mb-3">Super Admin</Badge>
-            <h1 className="text-2xl font-bold tracking-tight">Platform Command Center</h1>
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Manage companies, watch tenant health, and jump into platform operations from one dashboard.
+            <Badge className="mb-2 bg-primary/20 text-primary hover:bg-primary/25 border-none font-semibold px-2.5 py-0.5 rounded-full text-[10px] uppercase tracking-wider">
+              Super Admin Control Panel
+            </Badge>
+            <h1 className="text-xl font-extrabold tracking-tight md:text-2xl">Platform Operations</h1>
+            <p className="mt-1 max-w-2xl text-xs text-muted-foreground">
+              Monitor active tenants, manage system permissions, and track platform-wide resources.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={onRefresh}>
-              <IconRefresh className="mr-2 h-4 w-4" />
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs" onClick={onRefresh}>
+              <IconRefresh className="mr-1.5 h-3.5 w-3.5" />
               Refresh
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate('/settings')}>
+            <Button variant="outline" size="sm" className="h-8 rounded-xl text-xs" onClick={() => navigate('/settings')}>
               Settings
             </Button>
-            <Button size="sm" onClick={() => navigate('/companies/create')}>
+            <Button size="sm" className="h-8 rounded-xl text-xs shadow-md shadow-primary/20" onClick={() => navigate('/companies/create')}>
               Add Company
             </Button>
           </div>
@@ -180,7 +199,7 @@ const SuperAdminDashboard = ({ data, onRefresh }: DashboardComponentProps) => {
         <StatCard
           title="Companies"
           value={totalCompanies}
-          icon={<IconBuilding className="h-4 w-4 text-blue-500" />}
+          icon={<IconBuilding className="h-4 w-4" />}
           subtitle={`${activeCompanies} active · ${disabledCompanies} disabled`}
           valueColor="blue"
         />
@@ -188,80 +207,63 @@ const SuperAdminDashboard = ({ data, onRefresh }: DashboardComponentProps) => {
         <StatCard
           title="Tenant Users"
           value={totalTenantUsers}
-          icon={<IconUsers className="h-4 w-4 text-green-500" />}
-          subtitle="Active users across companies"
+          icon={<IconUsers className="h-4 w-4" />}
+          subtitle="Active user accounts"
           valueColor="green"
         />
 
         <StatCard
           title="Platform Health"
           value={`${activeRate}%`}
-          icon={<IconCheck className="h-4 w-4 text-green-500" />}
-          subtitle="Companies currently active"
+          icon={<IconCheck className="h-4 w-4" />}
+          subtitle="Active tenant percentage"
           valueColor="green"
         />
 
         <StatCard
           title="Super Admins"
           value={totalSuperAdmins}
-          icon={<IconUsers className="h-4 w-4 text-purple-500" />}
-          subtitle="Platform administrators"
+          icon={<IconUsers className="h-4 w-4" />}
+          subtitle="Platform managers"
           valueColor="purple"
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <Card className="xl:col-span-2 border-border/40 rounded-2xl shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
-              <CardTitle>Recent Companies</CardTitle>
-              <CardDescription>Latest tenants created on the platform</CardDescription>
+              <CardTitle className="text-sm font-bold">Recent Companies</CardTitle>
+              <CardDescription className="text-xs">Latest tenants registered on the platform</CardDescription>
             </div>
-            <Button size="sm" variant="outline" onClick={() => navigate('/companies')}>
+            <Button size="sm" variant="outline" className="h-7 rounded-lg text-xs" onClick={() => navigate('/companies')}>
               View all
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-2">
             {companies.length > 0 ? (
-              <div className="overflow-hidden rounded-xl border">
-                <div className="grid grid-cols-12 border-b bg-muted/50 px-4 py-2 text-xs font-semibold text-muted-foreground">
-                  <span className="col-span-4">Company</span>
-                  <span className="col-span-2">Plan</span>
-                  <span className="col-span-2">Users</span>
-                  <span className="col-span-2">Status</span>
-                  <span className="col-span-2 text-right">Created</span>
-                </div>
-                {companies.map((company) => (
-                  <button
+              <div className="space-y-3">
+                {companies.slice(0, 4).map((company) => (
+                  <div
                     key={company.id}
-                    type="button"
-                    className="grid w-full grid-cols-12 items-center border-b px-4 py-3 text-left text-sm transition-colors last:border-b-0 hover:bg-muted/50"
-                    onClick={() => navigate('/companies')}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border/50 bg-card p-4 transition-all hover:scale-[1.01] hover:border-primary/20 hover:shadow-sm"
                   >
-                    <div className="col-span-4 min-w-0">
-                      <p className="truncate font-medium">{company.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-foreground">{company.name}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {company.subdomain}.localhost
                       </p>
                     </div>
-                    <span className="col-span-2">
-                      <Badge variant="outline" className="capitalize">{company.plan}</Badge>
-                    </span>
-                    <span className="col-span-2">
-                      {company.userCount}
-                      {company.maxUsers ? (
-                        <span className="text-muted-foreground"> / {company.maxUsers}</span>
-                      ) : null}
-                    </span>
-                    <span className="col-span-2">
-                      <Badge variant={company.isActive ? 'default' : 'secondary'}>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Badge variant="outline" className="capitalize text-[10px] px-2 rounded-full">{company.plan}</Badge>
+                      <Badge variant={company.isActive ? 'default' : 'secondary'} className="text-[10px] px-2 rounded-full">
                         {company.isActive ? 'Active' : 'Disabled'}
                       </Badge>
-                    </span>
-                    <span className="col-span-2 text-right text-xs text-muted-foreground">
-                      {company.createdAt ? new Date(company.createdAt).toLocaleDateString() : '-'}
-                    </span>
-                  </button>
+                      <span className="text-xs text-muted-foreground hidden md:inline">
+                        {company.createdAt ? new Date(company.createdAt).toLocaleDateString() : '-'}
+                      </span>
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -269,7 +271,7 @@ const SuperAdminDashboard = ({ data, onRefresh }: DashboardComponentProps) => {
                 <IconBuilding className="mx-auto h-10 w-10 text-muted-foreground/50" />
                 <p className="mt-2 text-sm font-medium">No companies yet</p>
                 <p className="text-xs text-muted-foreground">Create a company to start tenant operations.</p>
-                <Button className="mt-4" size="sm" onClick={() => navigate('/companies/create')}>
+                <Button className="mt-4 h-8 text-xs rounded-lg" size="sm" onClick={() => navigate('/companies/create')}>
                   Add Company
                 </Button>
               </div>
@@ -278,49 +280,49 @@ const SuperAdminDashboard = ({ data, onRefresh }: DashboardComponentProps) => {
         </Card>
 
         <div className="space-y-4">
-          <Card>
+          <Card className="border-border/40 rounded-2xl shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle>Plan Distribution</CardTitle>
-              <CardDescription>Companies by subscription tier</CardDescription>
+              <CardTitle className="text-sm font-bold">Plan Distribution</CardTitle>
+              <CardDescription className="text-xs">Companies by subscription tier</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4 pt-2">
               {(platform?.planDistribution || []).length > 0 ? (
                 platform!.planDistribution.map((plan) => {
                   const percentage = getCompletionPercentage(plan.count, totalCompanies)
                   return (
                     <div key={plan.plan} className="space-y-1.5">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="capitalize">{plan.plan || 'free'}</span>
-                        <span className="font-medium">{plan.count}</span>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="capitalize font-medium text-foreground">{plan.plan || 'free'}</span>
+                        <span className="font-bold text-muted-foreground">{plan.count}</span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-muted">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                         <div className="h-full rounded-full bg-primary" style={{ width: `${percentage}%` }} />
                       </div>
                     </div>
                   )
                 })
               ) : (
-                <p className="text-sm text-muted-foreground">No plan data yet.</p>
+                <p className="text-xs text-muted-foreground">No plan data yet.</p>
               )}
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-border/40 rounded-2xl shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Common platform admin tasks</CardDescription>
+              <CardTitle className="text-sm font-bold">Quick Actions</CardTitle>
+              <CardDescription className="text-xs">Common platform admin tasks</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-2">
-              <Button className="justify-start" variant="outline" onClick={() => navigate('/companies/create')}>
-                <IconBuilding className="mr-2 h-4 w-4" />
+            <CardContent className="grid gap-2 pt-2">
+              <Button className="justify-start h-8 text-xs rounded-xl" variant="outline" onClick={() => navigate('/companies/create')}>
+                <IconBuilding className="mr-2 h-3.5 w-3.5" />
                 Add new company
               </Button>
-              <Button className="justify-start" variant="outline" onClick={() => navigate('/companies')}>
-                <IconBox className="mr-2 h-4 w-4" />
+              <Button className="justify-start h-8 text-xs rounded-xl" variant="outline" onClick={() => navigate('/companies')}>
+                <IconBox className="mr-2 h-3.5 w-3.5" />
                 Manage companies
               </Button>
-              <Button className="justify-start" variant="outline" onClick={() => navigate('/settings')}>
-                <IconUsers className="mr-2 h-4 w-4" />
+              <Button className="justify-start h-8 text-xs rounded-xl" variant="outline" onClick={() => navigate('/settings')}>
+                <IconUsers className="mr-2 h-3.5 w-3.5" />
                 Review permissions
               </Button>
             </CardContent>
@@ -328,26 +330,26 @@ const SuperAdminDashboard = ({ data, onRefresh }: DashboardComponentProps) => {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Platform Access Summary</CardTitle>
-          <CardDescription>High-level platform and tenant account health</CardDescription>
+      <Card className="border-border/40 rounded-2xl shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold">Platform Access Summary</CardTitle>
+          <CardDescription className="text-xs">High-level account health stats</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
+        <CardContent className="pt-2">
+          <div className="space-y-2.5">
             {data.usersByRole?.map((role) => (
-              <div key={role.role} className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
-                <span className="text-sm capitalize">{role.role.replace(/_/g, ' ')}</span>
-                <div className="flex items-center gap-2">
-                  <div className="w-24 bg-secondary rounded-full h-2">
+              <div key={role.role} className="flex items-center justify-between rounded-xl bg-muted/30 border border-border/10 px-4 py-2">
+                <span className="text-xs font-semibold capitalize text-foreground">{role.role.replace(/_/g, ' ')}</span>
+                <div className="flex items-center gap-4">
+                  <div className="w-24 bg-secondary rounded-full h-1.5 hidden sm:block">
                     <div
-                      className="bg-primary h-2 rounded-full"
+                      className="bg-primary h-1.5 rounded-full"
                       style={{
                         width: `${role.totalCount > 0 ? (role.activeCount / role.totalCount) * 100 : 0}%`,
                       }}
                     />
                   </div>
-                  <span className="text-sm font-medium">{role.activeCount}/{role.totalCount}</span>
+                  <span className="text-xs font-bold text-muted-foreground">{role.activeCount} / {role.totalCount} active</span>
                 </div>
               </div>
             ))}
@@ -368,16 +370,15 @@ const CompanyAdminDashboard = ({ data }: DashboardComponentProps) => {
   const openLoads = data.statusDistribution?.find((item) => item.status === 'open')?.count || 0
   const assignedLoads = data.statusDistribution?.find((item) => item.status === 'assigned')?.count || 0
   const inTransitLoads = data.statusDistribution?.find((item) => item.status === 'in_transit')?.count || 0
-  const urgentLoads = data.priorityDistribution?.find((item) => item.priority === 'urgent')?.count || 0
-  const highPriorityLoads = data.priorityDistribution?.find((item) => item.priority === 'high')?.count || 0
+
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Active Loads"
           value={activeLoads}
-          icon={<IconBox className="h-4 w-4 text-blue-500" />}
+          icon={<IconBox className="h-4 w-4" />}
           subtitle={`${openLoads} open · ${assignedLoads + inTransitLoads} moving`}
           valueColor="blue"
         />
@@ -385,15 +386,15 @@ const CompanyAdminDashboard = ({ data }: DashboardComponentProps) => {
         <StatCard
           title="Pending Bids"
           value={data.stats.pendingBids}
-          icon={<IconTrendingUp className="h-4 w-4 text-amber-500" />}
-          subtitle="Need review / assignment"
+          icon={<IconTrendingUp className="h-4 w-4" />}
+          subtitle="Awaiting winner assignment"
           valueColor="purple"
         />
 
         <StatCard
           title="Completion Rate"
           value={`${completionRate}%`}
-          icon={<IconCheck className="h-4 w-4 text-green-500" />}
+          icon={<IconCheck className="h-4 w-4" />}
           subtitle={`${data.stats.completedLoads} of ${data.stats.totalLoads} delivered`}
           valueColor="green"
         />
@@ -401,199 +402,161 @@ const CompanyAdminDashboard = ({ data }: DashboardComponentProps) => {
         <StatCard
           title="Revenue"
           value={formatMoney(data.stats.totalRevenue)}
-          icon={<IconTrendingUp className="h-4 w-4 text-green-600" />}
+          icon={<IconTrendingUp className="h-4 w-4" />}
           subtitle={`Avg ${formatMoney(data.stats.averageLoadValue)} / load`}
           valueColor="green"
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="self-start lg:col-span-2">
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
-            <div>
-              <CardTitle>Recent Load Activity</CardTitle>
-              <CardDescription>Latest requirements and delivery movement</CardDescription>
+
+      
+      <Card className="border-border/40 rounded-2xl shadow-sm pt-2">
+        <CardContent>
+          <AdvancedCharts
+            metrics={data.metrics}
+            recentUnreadMessages={data.recentUnreadMessages}
+            statusDistribution={data.statusDistribution}
+          />
+        </CardContent>
+      </Card>
+            <Card className="border-border/40 rounded-2xl shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between pb-3">
+          <div>
+            <CardTitle className="text-sm font-bold">Recent Load Activity</CardTitle>
+            <CardDescription className="text-xs">Latest cargo movements and listings</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" className="h-7 rounded-lg text-xs" onClick={() => navigate('/load')}>
+            View all
+          </Button>
+        </CardHeader>
+        <CardContent className="pt-2">
+          {data.recentLoads && data.recentLoads.length > 0 ? (
+            <div className="space-y-2">
+              {data.recentLoads.slice(0, 5).map((load: any) => (
+                <div
+                  key={getLoadId(load)}
+                  onClick={() => navigate(`/load/${getLoadId(load)}`)}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card p-3.5 transition-all hover:scale-[1.01] hover:border-primary/20 hover:shadow-sm cursor-pointer"
+                >
+                  <div className="min-w-0 flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                      <IconBox className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-xs text-foreground truncate">{load.loadNumber}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{getLoadRoute(load)} • {load.material}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <Badge variant="outline" className={cn('text-[9px] font-semibold px-2 py-0 rounded-full border-none capitalize', getStatusBadgeClass(load.status))}>
+                      {getStatusLabel(load.status)}
+                    </Badge>
+                    <span className="text-[10px] font-bold text-foreground">
+                      {load.bidWinningPrice ? formatMoney(load.bidWinningPrice) : 'Awaiting Bid'}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
-            <Button variant="outline" size="sm" onClick={() => navigate('/load')}>
-              View all
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {data.recentLoads && data.recentLoads.length > 0 ? (
-              <div className="divide-y rounded-xl border">
-                {data.recentLoads.slice(0, 6).map((load: any) => (
-                  <button
-                    key={getLoadId(load)}
-                    type="button"
-                    className="flex w-full items-center justify-between gap-3 p-3 text-left transition-colors hover:bg-muted/60"
-                    onClick={() => navigate(`/load/${getLoadId(load)}`)}
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                        <IconBox className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-sm font-semibold">{load.loadNumber}</p>
-                          <Badge variant="outline" className={getPriorityBadgeClass(load.priority)}>
-                            {load.priority || 'normal'}
-                          </Badge>
-                        </div>
-                        <p className="truncate text-xs text-muted-foreground">{getLoadRoute(load)}</p>
-                        <p className="truncate text-xs text-muted-foreground">{load.material}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <Badge variant="outline" className={getStatusBadgeClass(load.status)}>
-                        {getStatusLabel(load.status)}
-                      </Badge>
-                      {load.bidWinningPrice ? (
-                        <span className="text-xs font-medium">{formatMoney(load.bidWinningPrice)}</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Awaiting bid</span>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-dashed p-8 text-center">
-                <IconBox className="mx-auto h-10 w-10 text-muted-foreground/50" />
-                <p className="mt-2 text-sm font-medium">No recent loads</p>
-                <p className="text-xs text-muted-foreground">Create a load to start collecting bids.</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Attention Needed</CardTitle>
-              <CardDescription>Things admin should act on</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between rounded-xl bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                <div>
-                  <p className="text-sm font-medium">Pending bids</p>
-                  <p className="text-xs opacity-80">Review and assign winners</p>
-                </div>
-                <span className="text-xl font-bold">{data.stats.pendingBids}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl bg-red-50 p-3 text-red-900 dark:bg-red-950/30 dark:text-red-200">
-                <div>
-                  <p className="text-sm font-medium">Urgent / high priority</p>
-                  <p className="text-xs opacity-80">Loads needing faster action</p>
-                </div>
-                <span className="text-xl font-bold">{urgentLoads + highPriorityLoads}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-xl bg-blue-50 p-3 text-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
-                <div>
-                  <p className="text-sm font-medium">Unread messages</p>
-                  <p className="text-xs opacity-80">Transporter conversations</p>
-                </div>
-                <span className="text-xl font-bold">{data.stats.unreadMessages}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-      <div className="space-y-4">
-
-        <AdvancedCharts
-          metrics={data.metrics}
-          recentUnreadMessages={data.recentUnreadMessages}
-          statusDistribution={data.statusDistribution}
-          priorityDistribution={data.priorityDistribution}
-          vehicleTypeDistribution={data.vehicleTypeDistribution}
-          totalRevenue={data.stats.totalRevenue}
-          totalLoads={data.stats.totalLoads}
-          completedLoads={data.stats.completedLoads}
-        />
-      </div>
+          ) : (
+            <div className="rounded-xl border border-dashed p-8 text-center">
+              <IconBox className="mx-auto h-10 w-10 text-muted-foreground/50" />
+              <p className="mt-2 text-sm font-medium">No recent loads</p>
+              <p className="text-xs text-muted-foreground">Create a load to start collecting bids.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
 
 // CompanyUserDashboard
 const CompanyUserDashboard = ({ data }: DashboardComponentProps) => {
+  const navigate = useNavigate()
   const activeLoads = data.stats.totalLoads - data.stats.completedLoads - data.stats.canceledLoads
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <SectionHeader
         title="My Tasks"
-        subtitle="Your personal load assignments and activity"
+        subtitle="Your assigned load list and quick shortcuts"
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <StatCard
           title="Active Loads"
           value={activeLoads}
-          icon={<IconBox className="h-4 w-4 text-blue-500" />}
-          subtitle="Awaiting assignment"
+          icon={<IconBox className="h-4 w-4" />}
+          subtitle="Current load listings"
           valueColor="blue"
         />
 
         <StatCard
           title="Completed"
           value={data.stats.completedLoads}
-          icon={<IconCheck className="h-4 w-4 text-green-500" />}
-          subtitle="Successfully completed"
+          icon={<IconCheck className="h-4 w-4" />}
+          subtitle="Delivered successfully"
           valueColor="green"
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Navigate to key sections</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Button className="w-full justify-start" variant="outline">
-            <IconBox className="h-4 w-4 mr-2" />
-            View Available Loads
-          </Button>
-          <Button className="w-full justify-start" variant="outline">
-            <IconMessages className="h-4 w-4 mr-2" />
-            View Messages
-          </Button>
-          <Button className="w-full justify-start" variant="outline">
-            <IconUsers className="h-4 w-4 mr-2" />
-            Team Directory
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="border-border/40 rounded-2xl shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold">Quick Actions</CardTitle>
+            <CardDescription className="text-xs">TMS operation short links</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 pt-2">
+            <Button className="w-full justify-start h-8 text-xs rounded-xl" variant="outline" onClick={() => navigate('/load')}>
+              <IconBox className="h-3.5 w-3.5 mr-2" />
+              View Loads Board
+            </Button>
+            <Button className="w-full justify-start h-8 text-xs rounded-xl" variant="outline" onClick={() => navigate('/chats')}>
+              <IconMessages className="h-3.5 w-3.5 mr-2" />
+              View Messages
+            </Button>
+            <Button className="w-full justify-start h-8 text-xs rounded-xl" variant="outline" onClick={() => navigate('/settings')}>
+              <IconUsers className="h-3.5 w-3.5 mr-2" />
+              My Profile
+            </Button>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Your latest loads</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {data.recentLoads && data.recentLoads.length > 0 ? (
-            <div className="space-y-2">
-              {data.recentLoads.slice(0, 3).map((load: any) => (
-                <div key={getLoadId(load)} className="flex items-center justify-between p-2 hover:bg-secondary rounded transition-colors">
-                  <div>
-                    <p className="text-sm font-medium">{load.loadNumber}</p>
-                    <p className="text-xs text-muted-foreground">{getLoadRoute(load)}</p>
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className={getStatusBadgeClass(load.status)}
+        <Card className="md:col-span-2 border-border/40 rounded-2xl shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-bold">Recent Operations</CardTitle>
+            <CardDescription className="text-xs">Latest assigned loads activity</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            {data.recentLoads && data.recentLoads.length > 0 ? (
+              <div className="space-y-2">
+                {data.recentLoads.slice(0, 3).map((load: any) => (
+                  <div 
+                    key={getLoadId(load)} 
+                    onClick={() => navigate(`/load/${getLoadId(load)}`)}
+                    className="flex items-center justify-between p-3 border border-border/50 rounded-xl hover:bg-muted/40 transition-all cursor-pointer"
                   >
-                    {load.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No recent activity</p>
-          )}
-        </CardContent>
-      </Card>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">{load.loadNumber}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{getLoadRoute(load)}</p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={cn('text-[9px] border-none px-2 rounded-full capitalize font-semibold', getStatusBadgeClass(load.status))}
+                    >
+                      {getStatusLabel(load.status)}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground text-center py-6">No recent operational activity</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
@@ -614,82 +577,79 @@ const TransporterDashboard = ({ data }: DashboardComponentProps) => {
     0
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="Available Loads"
           value={openLoads || data.stats.totalLoads}
-          icon={<IconTruck className="h-4 w-4 text-green-500" />}
-          subtitle="Open for bidding"
+          icon={<IconTruck className="h-4 w-4" />}
+          subtitle="Open for transporter bids"
           valueColor="green"
         />
 
         <StatCard
           title="Active Trips"
           value={activeLoads}
-          icon={<IconBox className="h-4 w-4 text-blue-500" />}
-          subtitle={`${assignedLoads} assigned · ${inTransitLoads} in transit`}
+          icon={<IconBox className="h-4 w-4" />}
+          subtitle={`${assignedLoads} allocated · ${inTransitLoads} on road`}
           valueColor="blue"
         />
 
         <StatCard
           title="Completed"
           value={data.stats.completedLoads}
-          icon={<IconCheck className="h-4 w-4 text-green-500" />}
-          subtitle={`${completionRate}% success rate`}
+          icon={<IconCheck className="h-4 w-4" />}
+          subtitle={`${completionRate}% delivery rate`}
           valueColor="green"
         />
 
         <StatCard
           title="Earnings"
           value={formatMoney(data.stats.totalRevenue)}
-          icon={<IconTrendingUp className="h-4 w-4 text-emerald-600" />}
-          subtitle={`Avg ${formatMoney(data.stats.averageLoadValue)} / load`}
+          icon={<IconTrendingUp className="h-4 w-4" />}
+          subtitle={`Avg ${formatMoney(data.stats.averageLoadValue)} / trip`}
           valueColor="green"
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="self-start xl:col-span-2">
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <Card className="self-start xl:col-span-2 border-border/40 rounded-2xl shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
-              <CardTitle>Load Opportunities</CardTitle>
-              <CardDescription>Available and recently assigned loads</CardDescription>
+              <CardTitle className="text-sm font-bold">Load Opportunities</CardTitle>
+              <CardDescription className="text-xs">Cargo requirements open for bidding</CardDescription>
             </div>
-            <Button size="sm" variant="outline" onClick={() => navigate('/load')}>
+            <Button size="sm" variant="outline" className="h-7 rounded-lg text-xs" onClick={() => navigate('/load')}>
               View all
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-2">
             {data.recentLoads && data.recentLoads.length > 0 ? (
-              <div className="grid gap-3 md:grid-cols-2">
-                {data.recentLoads.slice(0, 6).map((load: any) => (
-                  <button
+              <div className="grid gap-3 sm:grid-cols-2">
+                {data.recentLoads.slice(0, 4).map((load: any) => (
+                  <div
                     key={getLoadId(load)}
-                    type="button"
-                    className="rounded-xl border p-3 text-left transition-colors hover:bg-muted/60"
                     onClick={() => navigate(`/load/${getLoadId(load)}`)}
+                    className="rounded-xl border border-border/50 p-4 transition-all hover:scale-[1.01] hover:border-primary/20 hover:shadow-sm cursor-pointer flex flex-col justify-between"
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold">{load.loadNumber}</p>
-                        <p className="mt-1 truncate text-xs text-muted-foreground">{getLoadRoute(load)}</p>
-                        <p className="mt-0.5 truncate text-xs text-muted-foreground">{load.material || 'Material not specified'}</p>
+                    <div className="min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="truncate text-xs font-bold text-foreground">{load.loadNumber}</p>
+                        <Badge variant="outline" className={cn('text-[9px] px-2 py-0 border-none capitalize font-semibold rounded-full', getStatusBadgeClass(load.status))}>
+                          {getStatusLabel(load.status)}
+                        </Badge>
                       </div>
-                      <Badge variant="outline" className={getStatusBadgeClass(load.status)}>
-                        {getStatusLabel(load.status)}
-                      </Badge>
+                      <p className="mt-1 truncate text-[10px] text-muted-foreground">{getLoadRoute(load)}</p>
+                      <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{load.material || 'General Cargo'}</p>
                     </div>
 
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <Badge variant="outline" className={getPriorityBadgeClass(load.priority)}>
-                        {load.priority || 'normal'}
+                    <div className="mt-3 flex items-center justify-between border-t border-dashed border-border/40 pt-2.5">
+                      <Badge variant="outline" className={cn('text-[9px] rounded-md px-1.5 py-0 border-none capitalize font-bold', getPriorityBadgeClass(load.priority))}>
+                        {load.priority || 'Normal'}
                       </Badge>
-                      <span className="text-xs font-semibold">
-                        {load.bidWinningPrice ? formatMoney(load.bidWinningPrice) : 'Bid now'}
-                      </span>
+                      <span className="text-[10px] font-semibold text-primary">Place Bid →</span>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -703,80 +663,166 @@ const TransporterDashboard = ({ data }: DashboardComponentProps) => {
         </Card>
 
         <div className="space-y-4">
-          <Card>
+          <Card className="border-border/40 rounded-2xl shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle>Delivery Health</CardTitle>
-              <CardDescription>Your current workload</CardDescription>
+              <CardTitle className="text-sm font-bold">Trip Distribution</CardTitle>
+              <CardDescription className="text-xs">Current workload statuses</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between rounded-xl bg-blue-50 p-3 text-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+            <CardContent className="space-y-2.5 pt-2">
+              <div className="flex items-center justify-between rounded-xl bg-blue-500/10 border border-blue-500/10 p-3 text-blue-900 dark:text-blue-200">
                 <div>
-                  <p className="text-sm font-medium">Assigned</p>
-                  <p className="text-xs opacity-80">Ready to pickup</p>
+                  <p className="text-xs font-semibold">Allocated Trips</p>
+                  <p className="text-[10px] opacity-80">Ready for dispatch</p>
                 </div>
-                <span className="text-xl font-bold">{assignedLoads}</span>
+                <span className="text-lg font-bold">{assignedLoads}</span>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-emerald-50 p-3 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
+              <div className="flex items-center justify-between rounded-xl bg-emerald-500/10 border border-emerald-500/10 p-3 text-emerald-900 dark:text-emerald-200">
                 <div>
-                  <p className="text-sm font-medium">In transit</p>
-                  <p className="text-xs opacity-80">Currently moving</p>
+                  <p className="text-xs font-semibold">In Transit</p>
+                  <p className="text-[10px] opacity-80">Trips currently moving</p>
                 </div>
-                <span className="text-xl font-bold">{inTransitLoads}</span>
+                <span className="text-lg font-bold">{inTransitLoads}</span>
               </div>
-              <div className="flex items-center justify-between rounded-xl bg-amber-50 p-3 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+              <div className="flex items-center justify-between rounded-xl bg-amber-500/10 border border-amber-500/10 p-3 text-amber-900 dark:text-amber-200">
                 <div>
-                  <p className="text-sm font-medium">Pending bids</p>
-                  <p className="text-xs opacity-80">Waiting for response</p>
+                  <p className="text-xs font-semibold">Submitted Bids</p>
+                  <p className="text-[10px] opacity-80">Awaiting winner award</p>
                 </div>
-                <span className="text-xl font-bold">{pendingBidCount}</span>
+                <span className="text-lg font-bold">{pendingBidCount}</span>
               </div>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-border/40 rounded-2xl shadow-sm">
             <CardHeader className="pb-3">
-              <CardTitle>Bid Status</CardTitle>
-              <CardDescription>Latest bid pipeline</CardDescription>
+              <CardTitle className="text-sm font-bold">Unread Messages</CardTitle>
+              <CardDescription className="text-xs">Recent customer chats</CardDescription>
             </CardHeader>
-            <CardContent>
-              {data.bidStatusDistribution?.length ? (
-                <div className="space-y-3">
-                  {data.bidStatusDistribution.map((item) => (
-                    <div key={item.status} className="flex items-center justify-between rounded-lg bg-muted/60 px-3 py-2">
-                      <span className="text-sm capitalize">{item.status.replace(/_/g, ' ')}</span>
-                      <Badge variant="secondary">{item.count}</Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No bid activity yet</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle>Messages</CardTitle>
-              <CardDescription>Unread customer/company chats</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-xl border p-3 text-left transition-colors hover:bg-muted/60"
+            <CardContent className="pt-2">
+              <div 
                 onClick={() => navigate('/chats')}
+                className="flex items-center justify-between rounded-xl border border-border/50 p-3 bg-card hover:bg-muted/40 transition-all cursor-pointer"
               >
                 <div>
-                  <p className="text-sm font-medium">Unread messages</p>
-                  <p className="text-xs text-muted-foreground">Open conversations</p>
+                  <p className="text-xs font-semibold text-foreground">Open Chats</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Click to view conversations</p>
                 </div>
-                <Badge variant={data.stats.unreadMessages ? 'default' : 'secondary'}>
+                <Badge variant={data.stats.unreadMessages ? 'default' : 'secondary'} className="text-[10px] font-bold">
                   {data.stats.unreadMessages}
                 </Badge>
-              </button>
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
+    </div>
+  )
+}
+
+// FinanceDashboard
+const FinanceDashboard = ({ data }: DashboardComponentProps) => {
+  const navigate = useNavigate()
+  
+  const verifiedLoads = data.statusDistribution?.find((item) => item.status === 'delivered')?.count || 0
+  const pendingAudits = data.stats.completedLoads || 0
+  const totalRevenue = data.stats.totalRevenue || 0
+  const deviationCount = data.stats.pendingBids || 0
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Pending Audits"
+          value={pendingAudits}
+          icon={<IconBox className="h-4 w-4 text-amber-500" />}
+          subtitle="Delivered loads to verify"
+          valueColor="default"
+        />
+
+        <StatCard
+          title="Verified Loads"
+          value={verifiedLoads}
+          icon={<IconCheck className="h-4 w-4 text-blue-500" />}
+          subtitle="Reconciled successfully"
+          valueColor="blue"
+        />
+
+        <StatCard
+          title="Payouts Reconciled"
+          value={formatMoney(totalRevenue)}
+          icon={<IconReceipt2 className="h-4 w-4 text-emerald-600" />}
+          subtitle="Reconciled billing volume"
+          valueColor="green"
+        />
+
+        <StatCard
+          title="Ceiling Deviations"
+          value={deviationCount}
+          icon={<IconTrendingUp className="h-4 w-4 text-red-500" />}
+          subtitle="Bids exceeding ceilings"
+          valueColor="default"
+        />
+      </div>
+
+      {/* Action shortcuts */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <Card className="border-border/40 rounded-2xl shadow-sm hover:shadow-md transition-all">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-sm font-bold">Billing Verification</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Match invoice rates and weighbridge reports</p>
+            </div>
+            <div className="h-9 w-9 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+              <IconReceipt2 className="h-5 w-5" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <Button 
+              onClick={() => navigate('/billing')}
+              className="w-full text-xs font-semibold h-8 rounded-xl shadow-sm shadow-primary/10"
+            >
+              Open Audit Verification Panel
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/40 rounded-2xl shadow-sm hover:shadow-md transition-all">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-sm font-bold">Freight Contract Rates</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Manage transporter route ceilings & contracts</p>
+            </div>
+            <div className="h-9 w-9 bg-primary/10 rounded-xl flex items-center justify-center text-primary">
+              <IconCategory className="h-5 w-5" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <Button 
+              onClick={() => navigate('/freight-rates')}
+              variant="outline"
+              className="w-full text-xs font-semibold h-8 rounded-xl"
+            >
+              Manage Negotiated Rates
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Info panel */}
+      <Card className="border-border/40 rounded-2xl p-5 bg-card/40 shadow-sm">
+        <div className="flex items-start gap-4">
+          <div className="bg-primary/10 p-2.5 rounded-xl text-primary shrink-0">
+            <IconDashboard className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-foreground">Welcome to the Finance Dashboard</h4>
+            <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
+              Use the shortcut buttons above or the sidebar menu links to audits and rates to manage contract ceilings, verify gate bridge scale weight recordings, audit transporter invoices, and reconcile payouts.
+            </p>
+          </div>
+        </div>
+      </Card>
     </div>
   )
 }
@@ -787,6 +833,7 @@ const dashboardComponents: Record<DashboardRole, React.ComponentType<DashboardCo
   company_admin: CompanyAdminDashboard,
   company_user: CompanyUserDashboard,
   transporter: TransporterDashboard,
+  finance: FinanceDashboard,
 }
 
 // Main component
@@ -951,19 +998,14 @@ export default function RoleBasedDashboard() {
   if (loading) {
     return (
       <Layout >
-        <Layout.Header sticky>
+        <Layout.Header sticky className="border-b bg-background/50 backdrop-blur-md">
           <div className="ml-auto flex items-center space-x-4">
             <ThemeSwitch />
             <UserNav />
           </div>
         </Layout.Header>
-        <Layout.Body>
-          <div className="flex flex-col items-center justify-center h-full gap-4">
-            <div className="animate-spin">
-              <IconBox className="h-8 w-8" />
-            </div>
-            <p className="text-muted-foreground">Loading dashboard...</p>
-          </div>
+        <Layout.Body className="bg-gradient-to-br from-background via-background to-muted/20">
+          <PageLoader label="Loading real-time TMS metrics..." />
         </Layout.Body>
       </Layout>
     )

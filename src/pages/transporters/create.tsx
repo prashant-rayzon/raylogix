@@ -1,6 +1,6 @@
 // frontend/src/components/transporters/CreateTransporterModal.tsx
 import React, { useState } from 'react';
-import { transportersService } from '../../api/services/transporters/transporters.service';
+import { transportersService } from '@/api/services/transporters/transporters.service';
 import { toast } from '@/components/ui/use-toast';
 import {
   Mail,

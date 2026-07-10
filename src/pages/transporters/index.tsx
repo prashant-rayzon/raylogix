@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { transportersService } from '../../api/services/transporters/transporters.service';
+import { transportersService } from '@/api/services/transporters/transporters.service';
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,8 +13,9 @@ import {
   AlertCircle,
   Package,
 } from 'lucide-react';
-import { UserNav } from '../../components/user-nav';
+import { UserNav } from '@/components/user-nav';
 import { Layout } from '@/components/custom/layout';
+import { SectionLoader } from '@/components/loader';
 import ThemeSwitch from '@/components/theme-switch';
 import { CreateTransporterModal } from './create';
 import { EditTransporterModal } from './edit/[id]';
@@ -368,10 +369,7 @@ export default function TransportersPage() {
 
             {/* Loading State */}
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
-                <p className="text-sm text-muted-foreground mt-4">Loading transporters...</p>
-              </div>
+              <SectionLoader label="Loading transporters..." />
             ) : filteredTransporters.length > 0 ? (
               <>
                 <div className="overflow-x-auto">

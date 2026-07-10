@@ -13,7 +13,7 @@ const api = axios.create({
 
 /**
  * Get messages by conversation ID
- * GET /api/messages/conversation/:conversationId
+ * GET /api/api/messages/conversation/:conversationId
  */
 export async function getMessagesByConversation(
   conversationId: string,
@@ -33,7 +33,7 @@ export async function getMessages(
   userId2: string,
   params?: { limit?: number; offset?: number; before?: string; after?: string }
 ): Promise<any> {
-  const res = await api.get(`/messages/${userId1}/${userId2}`, {
+  const res = await api.get(`/api/messages/${userId1}/${userId2}`, {
     params,
     headers: {
       Authorization: `Bearer ${token()}`,
@@ -43,7 +43,7 @@ export async function getMessages(
 }
 
 export async function getUnreadCount(): Promise<any> {
-  const res = await api.get(`/messages/unread/count`, {
+  const res = await api.get(`/api/messages/unread/count`, {
     headers: {
       Authorization: `Bearer ${token()}`,
     },
@@ -52,7 +52,7 @@ export async function getUnreadCount(): Promise<any> {
 }
 
 export async function getMessageStats(): Promise<any> {
-  const res = await api.get(`/messages/stats`, {
+  const res = await api.get(`/api/messages/stats`, {
     headers: {
       Authorization: `Bearer ${token()}`,
     },
@@ -62,7 +62,7 @@ export async function getMessageStats(): Promise<any> {
 
 export async function markAllAsRead(senderId: string): Promise<any> {
   const res = await api.put(
-    `/messages/read/all/${senderId}`,
+    `/api/messages/read/all/${senderId}`,
     {},
     {
       headers: {
@@ -75,7 +75,7 @@ export async function markAllAsRead(senderId: string): Promise<any> {
 
 export async function markAsRead(messageId: string): Promise<any> {
   const res = await api.put(
-    `/messages/${messageId}/read`,
+    `/api/messages/${messageId}/read`,
     {},
     {
       headers: {
@@ -90,7 +90,7 @@ export async function searchMessages(
   query: string,
   params?: { limit?: number; offset?: number }
 ): Promise<any> {
-  const res = await api.get(`/messages/search/${encodeURIComponent(query)}`, {
+  const res = await api.get(`/api/messages/search/${encodeURIComponent(query)}`, {
     params,
     headers: {
       Authorization: `Bearer ${token()}`,
@@ -104,7 +104,7 @@ export async function forwardMessage(data: {
   recipientIds: string[]
   content?: string
 }): Promise<any> {
-  const res = await api.post('/messages/forward', data, {
+  const res = await api.post('/api/messages/forward', data, {
     headers: {
       Authorization: `Bearer ${token()}`,
     },
@@ -116,7 +116,7 @@ export async function bulkDeleteMessages(data: {
   messageIds: string[]
   deleteFor?: 'all' | 'self'
 }): Promise<any> {
-  const res = await api.delete('/messages/bulk/delete', {
+  const res = await api.delete('/api/messages/bulk/delete', {
     data,
     headers: {
       Authorization: `Bearer ${token()}`,
@@ -126,7 +126,7 @@ export async function bulkDeleteMessages(data: {
 }
 
 export async function getPinnedMessages(userId: string): Promise<any> {
-  const res = await api.get(`/messages/pinned/${userId}`, {
+  const res = await api.get(`/api/messages/pinned/${userId}`, {
     headers: {
       Authorization: `Bearer ${token()}`,
     },
@@ -136,7 +136,7 @@ export async function getPinnedMessages(userId: string): Promise<any> {
 
 export async function togglePinMessage(messageId: string): Promise<any> {
   const res = await api.put(
-    `/messages/${messageId}/pin`,
+    `/api/messages/${messageId}/pin`,
     {},
     {
       headers: {
@@ -149,7 +149,7 @@ export async function togglePinMessage(messageId: string): Promise<any> {
 
 export async function editMessage(messageId: string, content: string): Promise<any> {
   const res = await api.put(
-    `/messages/${messageId}`,
+    `/api/messages/${messageId}`,
     { content },
     {
       headers: {
@@ -164,7 +164,7 @@ export async function deleteMessage(
   messageId: string,
   deleteFor: 'all' | 'self' = 'all'
 ): Promise<any> {
-  const res = await api.delete(`/messages/${messageId}`, {
+  const res = await api.delete(`/api/messages/${messageId}`, {
     data: { deleteFor },
     headers: {
       Authorization: `Bearer ${token()}`,
@@ -175,7 +175,7 @@ export async function deleteMessage(
 
 export async function addReaction(messageId: string, emoji: string): Promise<any> {
   const res = await api.post(
-    `/messages/${messageId}/reactions`,
+    `/api/messages/${messageId}/reactions`,
     { emoji },
     {
       headers: {
@@ -188,7 +188,7 @@ export async function addReaction(messageId: string, emoji: string): Promise<any
 
 export async function removeReaction(messageId: string, emoji: string): Promise<any> {
   const res = await api.delete(
-    `/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
+    `/api/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
     {
       headers: {
         Authorization: `Bearer ${token()}`,
@@ -199,7 +199,7 @@ export async function removeReaction(messageId: string, emoji: string): Promise<
 }
 
 export async function getMessage(messageId: string): Promise<any> {
-  const res = await api.get(`/messages/${messageId}`, {
+  const res = await api.get(`/api/messages/${messageId}`, {
     headers: {
       Authorization: `Bearer ${token()}`,
     },
@@ -216,7 +216,7 @@ export async function sendMessageRest(data: {
   conversationId?: string
   metadata?: any
 }): Promise<any> {
-  const res = await api.post('/messages', data, {
+  const res = await api.post('/api/messages', data, {
     headers: {
       Authorization: `Bearer ${token()}`,
     },

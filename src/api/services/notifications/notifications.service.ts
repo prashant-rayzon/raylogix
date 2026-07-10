@@ -32,7 +32,7 @@ export interface NotificationResponse {
   }
 }
 
-const BASE = '/notifications'
+const BASE = '/api/notifications'
 
 export const notificationsService = {
   /** Get all notifications for the current user (paginated) */

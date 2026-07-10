@@ -39,9 +39,17 @@ export default function ActivityLogPage() {
   const [pages, setPages] = useState(1)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [action, setAction] = useState('')
   const [resource, setResource] = useState('')
   const [status, setStatus] = useState('')
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 300)
+    return () => clearTimeout(handler)
+  }, [search])
 
   const loadLogs = useCallback(async () => {
     try {
@@ -49,7 +57,7 @@ export default function ActivityLogPage() {
       const response = await auditService.list({
         page,
         limit: 25,
-        search: search.trim() || undefined,
+        search: debouncedSearch.trim() || undefined,
         action: action || undefined,
         resource: resource || undefined,
         status: status || undefined,
@@ -66,7 +74,7 @@ export default function ActivityLogPage() {
     } finally {
       setLoading(false)
     }
-  }, [action, page, resource, search, status])
+  }, [action, page, resource, debouncedSearch, status])
 
   useEffect(() => {
     loadLogs()

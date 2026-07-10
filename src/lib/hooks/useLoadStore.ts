@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react'
 import { useAppDispatch, useAppSelector } from '@/store'
 import {
   fetchLoads,
@@ -10,7 +11,6 @@ import {
   markDeliveredAsync,
   setSearchFilter,
   setStatusFilter,
-  setPriorityFilter,
   setSortBy,
   clearFilters,
   setPage,
@@ -46,7 +46,64 @@ export const useLoadStore = () => {
   const listError = useAppSelector((state) => state.load.listError)
   const detailError = useAppSelector((state) => state.load.detailError)
 
-  return {
+  const listLoadsAction = useCallback((params?: {
+    page?: number
+    limit?: number
+    search?: string
+    status?: LoadStatus | 'all'
+    material?: string
+    sortBy?: string
+    vehicleType?: string
+    loadDirection?: 'all' | 'outbound' | 'inbound'
+    isPublic?: 'all' | 'true' | 'false'
+    pickupCity?: string
+    deliveryCity?: string
+    dateField?: 'pickupDate' | 'deliveryDate' | 'createdAt'
+    dateFrom?: string
+    dateTo?: string
+  }) => dispatch(fetchLoads(params || {})), [dispatch])
+
+  const getLoadDetailsAction = useCallback((loadId: string) => dispatch(fetchLoadDetails(loadId)), [dispatch])
+  const createLoadAction = useCallback((payload: CreateLoadPayload) => dispatch(createLoadAsync(payload)), [dispatch])
+  const updateLoadAction = useCallback((loadId: string, payload: any) => dispatch(updateLoadAsync({ loadId, payload })), [dispatch])
+  const deleteLoadAction = useCallback((loadId: string) => dispatch(deleteLoadAsync(loadId)), [dispatch])
+  const assignWinnerAction = useCallback((
+    loadId: string,
+    bidId: string,
+    allocatedVehicles?: number,
+    finalRate?: number,
+    rateType?: 'per_vehicle' | 'total',
+    notes?: string
+  ) => dispatch(assignWinnerAsync({ loadId, bidId, allocatedVehicles, finalRate, rateType, notes })), [dispatch])
+  const markInTransitAction = useCallback((loadId: string, actualPickupDate?: string | number) =>
+    dispatch(markInTransitAsync({ loadId, actualPickupDate })), [dispatch])
+  const markDeliveredAction = useCallback((
+    loadId: string,
+    actualDeliveryDate?: string | number,
+    receiverName?: string,
+    receiverPhone?: string,
+    deliveryRemarks?: string,
+    deliveryProofFiles?: File[]
+  ) => dispatch(markDeliveredAsync({
+    loadId,
+    actualDeliveryDate,
+    receiverName,
+    receiverPhone,
+    deliveryRemarks,
+    deliveryProofFiles,
+  })), [dispatch])
+  const setSearchFilterAction = useCallback((search: string) => dispatch(setSearchFilter(search)), [dispatch])
+  const setStatusFilterAction = useCallback((status: LoadStatus | 'all') => dispatch(setStatusFilter(status)), [dispatch])
+  const setSortByAction = useCallback((sortBy: string) => dispatch(setSortBy(sortBy)), [dispatch])
+  const clearFiltersAction = useCallback(() => dispatch(clearFilters()), [dispatch])
+  const setPageAction = useCallback((page: number) => dispatch(setPage(page)), [dispatch])
+  const setLimitAction = useCallback((limit: number) => dispatch(setLimit(limit)), [dispatch])
+  const clearErrorAction = useCallback(() => dispatch(clearError()), [dispatch])
+  const clearListErrorAction = useCallback(() => dispatch(clearListError()), [dispatch])
+  const clearDetailErrorAction = useCallback(() => dispatch(clearDetailError()), [dispatch])
+  const clearCurrentLoadAction = useCallback(() => dispatch(clearCurrentLoad()), [dispatch])
+
+  return useMemo(() => ({
     // State
     loads,
     currentLoad,
@@ -64,57 +121,62 @@ export const useLoadStore = () => {
     detailError,
 
     // Actions
-    listLoads: (params?: {
-      page?: number
-      limit?: number
-      search?: string
-      status?: LoadStatus | 'all'
-      priority?: string | 'all'
-      sortBy?: string
-    }) => dispatch(fetchLoads(params || {})),
-
-    getLoadDetails: (loadId: string) => dispatch(fetchLoadDetails(loadId)),
-
-    createLoad: (payload: CreateLoadPayload) => dispatch(createLoadAsync(payload)),
-
-    updateLoad: (loadId: string, payload: any) =>
-      dispatch(updateLoadAsync({ loadId, payload })),
-
-    deleteLoad: (loadId: string) => dispatch(deleteLoadAsync(loadId)),
-
-    assignWinner: (
-      loadId: string,
-      bidId: string,
-      allocatedVehicles?: number,
-      finalRate?: number,
-      rateType?: 'per_vehicle' | 'total',
-      notes?: string
-    ) => dispatch(assignWinnerAsync({ loadId, bidId, allocatedVehicles, finalRate, rateType, notes })),
-
-    markInTransit: (loadId: string, actualPickupDate?: string | number) =>
-      dispatch(markInTransitAsync({ loadId, actualPickupDate })),
-
-    markDelivered: (
-      loadId: string,
-      actualDeliveryDate?: string | number,
-      deliveryProof?: string
-    ) => dispatch(markDeliveredAsync({ loadId, actualDeliveryDate, deliveryProof })),
+    listLoads: listLoadsAction,
+    getLoadDetails: getLoadDetailsAction,
+    createLoad: createLoadAction,
+    updateLoad: updateLoadAction,
+    deleteLoad: deleteLoadAction,
+    assignWinner: assignWinnerAction,
+    markInTransit: markInTransitAction,
+    markDelivered: markDeliveredAction,
 
     // Filters
-    setSearchFilter: (search: string) => dispatch(setSearchFilter(search)),
-    setStatusFilter: (status: LoadStatus | 'all') => dispatch(setStatusFilter(status)),
-    setPriorityFilter: (priority: string) => dispatch(setPriorityFilter(priority)),
-    setSortBy: (sortBy: string) => dispatch(setSortBy(sortBy)),
-    clearFilters: () => dispatch(clearFilters()),
+    setSearchFilter: setSearchFilterAction,
+    setStatusFilter: setStatusFilterAction,
+    setSortBy: setSortByAction,
+    clearFilters: clearFiltersAction,
 
     // Pagination
-    setPage: (page: number) => dispatch(setPage(page)),
-    setLimit: (limit: number) => dispatch(setLimit(limit)),
+    setPage: setPageAction,
+    setLimit: setLimitAction,
 
     // Error handling
-    clearError: () => dispatch(clearError()),
-    clearListError: () => dispatch(clearListError()),
-    clearDetailError: () => dispatch(clearDetailError()),
-    clearCurrentLoad: () => dispatch(clearCurrentLoad()),
-  }
+    clearError: clearErrorAction,
+    clearListError: clearListErrorAction,
+    clearDetailError: clearDetailErrorAction,
+    clearCurrentLoad: clearCurrentLoadAction,
+  }), [
+    loads,
+    currentLoad,
+    currentBids,
+    pagination,
+    filters,
+    loading,
+    creating,
+    updating,
+    deleting,
+    assigning,
+    tracking,
+    error,
+    listError,
+    detailError,
+    listLoadsAction,
+    getLoadDetailsAction,
+    createLoadAction,
+    updateLoadAction,
+    deleteLoadAction,
+    assignWinnerAction,
+    markInTransitAction,
+    markDeliveredAction,
+    setSearchFilterAction,
+    setStatusFilterAction,
+    setSortByAction,
+    clearFiltersAction,
+    setPageAction,
+    setLimitAction,
+    clearErrorAction,
+    clearListErrorAction,
+    clearDetailErrorAction,
+    clearCurrentLoadAction,
+  ])
 }

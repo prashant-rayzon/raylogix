@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/components/ui/use-toast'
 
 import { getAuthStore } from '@/lib/auth'
+import { getApiErrorMessage } from '@/lib/api-error'
 import { load as loadApi } from '@/api/services'
+import { hasPermission, ALL_PERMISSIONS } from '@/lib/permissions'
 import type { Load } from '@/api/services/load/loads.service'
 
 export default function CancelLoad() {
@@ -21,7 +23,7 @@ export default function CancelLoad() {
   const [error, setError] = useState<string | null>(null)
 
   const auth = getAuthStore()
-  const role = auth?.user?.role
+  const user = auth?.user
 
   useEffect(() => {
     let mounted = true
@@ -35,7 +37,7 @@ export default function CancelLoad() {
         setLoad(res.data.load)
       } catch (e: any) {
         if (!mounted) return
-        setError(e?.message || 'Failed to load')
+        setError(getApiErrorMessage(e, 'Failed to load'))
       } finally {
         if (!mounted) return
         setLoading(false)
@@ -48,8 +50,8 @@ export default function CancelLoad() {
   }, [id])
 
   const canCancel = useMemo(() => {
-    return role === 'company_admin' && load?.status === 'open'
-  }, [role, load?.status])
+    return Boolean(user && hasPermission(user, ALL_PERMISSIONS.LOAD_DELETE) && load?.status === 'open')
+  }, [user, load?.status])
 
   const handleCancelLoad = async () => {
     if (!id) return
@@ -61,7 +63,7 @@ export default function CancelLoad() {
     } catch (e: any) {
       toast({
         title: 'Cancel failed',
-        description: e?.message || 'Unknown error',
+        description: getApiErrorMessage(e, 'Unknown error'),
         variant: 'destructive',
       })
       setLoading(false)
@@ -98,7 +100,7 @@ export default function CancelLoad() {
           </Button>
           <div>
             <h1 className="text-2xl font-semibold">Cancel Load</h1>
-            <p className="text-sm text-muted-foreground">Only open loads can be canceled.</p>
+            <p className="text-sm text-muted-foreground">Only open loads with cancel permission can be canceled.</p>
           </div>
         </div>
       </Layout.Header>
@@ -142,7 +144,7 @@ export default function CancelLoad() {
 
             {!canCancel && (
               <div className="text-xs text-muted-foreground">
-                Cancellation restricted. Need role <span className="font-medium">company_admin</span> and load status <span className="font-medium">open</span>.
+                Cancellation restricted. Need <span className="font-medium">{ALL_PERMISSIONS.LOAD_DELETE}</span> permission and load status <span className="font-medium">open</span>.
               </div>
             )}
           </CardContent>

@@ -14,6 +14,64 @@ import {
   deleteLoad,
 } from '@/api/services/load/loads.crud.service'
 
+const normalizeBidAmount = (value: unknown) => {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? amount : null
+}
+
+const buildBidSummary = (bids: Bid[]) => {
+  const transporterIds = new Set<string>()
+  const amounts: number[] = []
+
+  bids.forEach((bid) => {
+    const transporterId =
+      typeof bid.transporterId === 'string'
+        ? bid.transporterId
+        : bid.transporterId?._id
+
+    if (transporterId) transporterIds.add(String(transporterId))
+
+    const amount = normalizeBidAmount((bid as any).bidAmount)
+    if (amount !== null) amounts.push(amount)
+  })
+
+  return {
+    totalBids: bids.length,
+    activeBids: bids.filter((bid) => bid.status === 'pending').length,
+    acceptedBids: bids.filter((bid) => bid.status === 'accepted').length,
+    rejectedBids: bids.filter((bid) => bid.status === 'rejected').length,
+    participatingTransporters: transporterIds.size,
+    lowestBid: amounts.length ? Math.min(...amounts) : 0,
+    highestBid: amounts.length ? Math.max(...amounts) : 0,
+    averageBid: amounts.length
+      ? Number((amounts.reduce((sum, amount) => sum + amount, 0) / amounts.length).toFixed(2))
+      : 0,
+  }
+}
+
+const applyRealtimeBidToLoad = (load: Load, bid: Bid): Load => {
+  if (String(bid.loadId) !== String(load._id)) return load
+
+  const existingBoardBids = Array.isArray(load.boardBids) ? [...load.boardBids] : []
+  const existingBidIndex = existingBoardBids.findIndex((item) => item._id === bid._id)
+  if (existingBidIndex >= 0) {
+    existingBoardBids[existingBidIndex] = {
+      ...existingBoardBids[existingBidIndex],
+      ...bid,
+    }
+  } else {
+    existingBoardBids.push(bid)
+  }
+
+  existingBoardBids.sort((a, b) => Number(a.bidAmount || 0) - Number(b.bidAmount || 0))
+
+  return {
+    ...load,
+    bidSummary: buildBidSummary(existingBoardBids),
+    boardBids: existingBoardBids,
+  }
+}
+
 export type LoadState = {
   // List state
   loads: Load[]
@@ -29,8 +87,15 @@ export type LoadState = {
   filters: {
     search: string
     status: LoadStatus | 'all'
-    priority: string | 'all'
     sortBy: string
+    vehicleType: string
+    loadDirection: 'all' | 'outbound' | 'inbound'
+    isPublic: 'all' | 'true' | 'false'
+    pickupCity: string
+    deliveryCity: string
+    dateField: 'pickupDate' | 'deliveryDate' | 'createdAt'
+    dateFrom: string
+    dateTo: string
   }
   
   // Pagination
@@ -64,8 +129,15 @@ const initialState: LoadState = {
   filters: {
     search: '',
     status: 'all',
-    priority: 'all',
     sortBy: '-createdAt',
+    vehicleType: '',
+    loadDirection: 'all',
+    isPublic: 'all',
+    pickupCity: '',
+    deliveryCity: '',
+    dateField: 'pickupDate',
+    dateFrom: '',
+    dateTo: '',
   },
   pagination: {
     page: 1,
@@ -94,8 +166,16 @@ export const fetchLoads = createAsyncThunk(
       limit?: number
       search?: string
       status?: LoadStatus | 'all'
-      priority?: string | 'all'
+      material?: string
       sortBy?: string
+      vehicleType?: string
+      loadDirection?: 'all' | 'outbound' | 'inbound'
+      isPublic?: 'all' | 'true' | 'false'
+      pickupCity?: string
+      deliveryCity?: string
+      dateField?: 'pickupDate' | 'deliveryDate' | 'createdAt'
+      dateFrom?: string
+      dateTo?: string
     },
     { rejectWithValue }
   ) => {
@@ -105,8 +185,16 @@ export const fetchLoads = createAsyncThunk(
         limit: params.limit || 20,
         search: params.search || undefined,
         status: params.status === 'all' ? undefined : (params.status as LoadStatus),
-        priority: params.priority === 'all' ? undefined : params.priority,
+        material: params.material || undefined,
         sortBy: params.sortBy || '-createdAt',
+        vehicleType: params.vehicleType || undefined,
+        loadDirection: params.loadDirection === 'all' ? undefined : params.loadDirection,
+        isPublic: params.isPublic === 'all' ? undefined : params.isPublic,
+        pickupCity: params.pickupCity || undefined,
+        deliveryCity: params.deliveryCity || undefined,
+        dateField: params.dateField || 'pickupDate',
+        dateFrom: params.dateFrom || undefined,
+        dateTo: params.dateTo || undefined,
       })
 
       return {
@@ -248,12 +336,29 @@ export const markDeliveredAsync = createAsyncThunk(
     {
       loadId,
       actualDeliveryDate,
-      deliveryProof,
-    }: { loadId: string; actualDeliveryDate?: string | number; deliveryProof?: string },
+      receiverName,
+      receiverPhone,
+      deliveryRemarks,
+      deliveryProofFiles,
+    }: {
+      loadId: string
+      actualDeliveryDate?: string | number
+      receiverName?: string
+      receiverPhone?: string
+      deliveryRemarks?: string
+      deliveryProofFiles?: File[]
+    },
     { rejectWithValue }
   ) => {
     try {
-      const res = await markDelivered({ loadId, actualDeliveryDate, deliveryProof })
+      const res = await markDelivered({
+        loadId,
+        actualDeliveryDate,
+        receiverName,
+        receiverPhone,
+        deliveryRemarks,
+        deliveryProofFiles,
+      })
       return res.data.load
     } catch (err: any) {
       return rejectWithValue(err?.response?.data?.message || err?.message || 'Failed to mark delivered')
@@ -274,10 +379,6 @@ const loadSlice = createSlice({
       state.filters.status = action.payload
       state.pagination.page = 1
     },
-    setPriorityFilter(state, action: PayloadAction<string>) {
-      state.filters.priority = action.payload
-      state.pagination.page = 1
-    },
     setSortBy(state, action: PayloadAction<string>) {
       state.filters.sortBy = action.payload
       state.pagination.page = 1
@@ -286,8 +387,15 @@ const loadSlice = createSlice({
       state.filters = {
         search: '',
         status: 'all',
-        priority: 'all',
         sortBy: '-createdAt',
+        vehicleType: '',
+        loadDirection: 'all',
+        isPublic: 'all',
+        pickupCity: '',
+        deliveryCity: '',
+        dateField: 'pickupDate',
+        dateFrom: '',
+        dateTo: '',
       }
       state.pagination.page = 1
     },
@@ -361,6 +469,9 @@ const loadSlice = createSlice({
         }
         return bid
       })
+    },
+    applyRealtimeBidToLoadList(state, action: PayloadAction<Bid>) {
+      state.loads = state.loads.map((load) => applyRealtimeBidToLoad(load, action.payload))
     },
   },
   extraReducers: (builder) => {
@@ -549,7 +660,6 @@ const loadSlice = createSlice({
 export const {
   setSearchFilter,
   setStatusFilter,
-  setPriorityFilter,
   setSortBy,
   clearFilters,
   setPage,
@@ -561,6 +671,7 @@ export const {
   upsertRealtimeLoad,
   upsertRealtimeBid,
   applyRealtimeLoadAssignment,
+  applyRealtimeBidToLoadList,
 } = loadSlice.actions
 
 export default loadSlice.reducer

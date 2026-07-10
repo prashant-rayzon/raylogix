@@ -1,7 +1,7 @@
 // frontend/src/pages/users/index.tsx
 import { useEffect, useState } from 'react';
-import { usersService } from '../../api/services/users/users.service';
-import { PermissionGate } from '../../components/auth/PermissionGate';
+import { usersService } from '@/api/services/users/users.service';
+import { PermissionGate } from '@/components/auth/PermissionGate';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -14,8 +14,9 @@ import {
   XCircle,
   Lock,
 } from 'lucide-react';
-import { UserNav } from '../../components/user-nav';
+import { UserNav } from '@/components/user-nav';
 import { Layout } from '@/components/custom/layout';
+import { SectionLoader } from '@/components/loader';
 import ThemeSwitch from '@/components/theme-switch';
 import { CreateUserModal } from './create';
 import { EditUserModal } from './edit/[id]';
@@ -277,10 +278,7 @@ export default function UsersPage() {
 
             {/* Loading State */}
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
-                <p className="text-sm text-muted-foreground mt-4">Loading users...</p>
-              </div>
+              <SectionLoader label="Loading users..." />
             ) : filteredUsers.length > 0 ? (
               <>
                 <div className="overflow-x-auto">

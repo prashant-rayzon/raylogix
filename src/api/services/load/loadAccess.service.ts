@@ -11,7 +11,7 @@ export type AdminTransporterOption = {
 // List transporters in the current tenant (admin)
 export async function listAdminTransporters(): Promise<AdminTransporterOption[]> {
   // backend: GET /api/admin/transporters
-  const res = await client.get<any>(`/admin/transporters`, {
+  const res = await client.get<any>(`/api/admin/transporters`, {
     params: { page: 1, limit: 200 },
   })
 

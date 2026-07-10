@@ -1,8 +1,8 @@
 // frontend/src/components/users/CreateUserModal.tsx
 import { useState } from 'react';
-import { usersService } from '../../api/services/users/users.service';
+import { usersService } from '@/api/services/users/users.service';
 import type { UserRole } from '@/api/types';
-import { useRole } from '../../lib/hooks/useRole';
+import { useRole } from '@/lib/hooks/useRole';
 import { 
   Mail, 
   Lock, 
@@ -14,10 +14,10 @@ import {
   Shield,
   Search,
 } from 'lucide-react';
-import { PermissionGate } from '../../components/auth/PermissionGate';
+import { PermissionGate } from '@/components/auth/PermissionGate';
 import { toast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
-import { PERMISSION_GROUPS } from '@/lib/permissions';
+import { PERMISSION_GROUPS, getAssignablePermissionsForRole } from '@/lib/permissions';
 
 interface CreateUserModalProps {
   isOpen: boolean;
@@ -32,6 +32,7 @@ interface UserFormData {
   lastName: string;
   username: string;
   role: UserRole;
+  team: 'general' | 'inbound' | 'outbound';
 }
 
 interface FormErrors {
@@ -57,6 +58,7 @@ const USER_ROLES = [
   { value: 'company_user', label: 'Company User' },
   { value: 'company_admin', label: 'Company Admin' },
   { value: 'transporter', label: 'Transporter' },
+  { value: 'finance', label: 'Finance Auditor' },
 ];
 
 export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalProps) {
@@ -71,6 +73,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
     lastName: '',
     username: '',
     role: 'company_user',
+    team: 'general',
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -187,6 +190,18 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
     return permissions.every((permission) => hasPermission(permission));
   };
 
+  const assignablePermissions = getAssignablePermissionsForRole(formData.role, userPermissions);
+
+  const filteredPermissionGroups = (searchPermission
+    ? PERMISSION_GROUPS.filter((group) =>
+        group.label.toLowerCase().includes(searchPermission.toLowerCase()) ||
+        group.key.toLowerCase().includes(searchPermission.toLowerCase())
+      )
+    : PERMISSION_GROUPS
+  ).filter((group) =>
+    group.permissions.some((permission) => assignablePermissions.has(permission))
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -241,6 +256,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
       lastName: '',
       username: '',
       role: 'company_user',
+      team: 'general',
     });
     setErrors({});
     setTouched({});
@@ -475,6 +491,30 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
                       : 'You can only create company users'}
             </p>
           </div>
+
+          {formData.role === 'company_user' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="modal-team">
+                Team / Department <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="modal-team"
+                name="team"
+                value={formData.team}
+                onChange={handleChange}
+                onBlur={handleBlur}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all bg-white"
+                required
+              >
+                <option value="general">General (Inbound + Outbound)</option>
+                <option value="inbound">Inbound Team</option>
+                <option value="outbound">Outbound Team</option>
+              </select>
+              <p className="mt-1.5 text-xs text-gray-500">
+                Determines which sections and load types (inbound/outbound) this user can access
+              </p>
+            </div>
+          )}
         </div>
           )}
 
@@ -521,14 +561,11 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {(searchPermission
-                          ? PERMISSION_GROUPS.filter((group) =>
-                              group.label.toLowerCase().includes(searchPermission.toLowerCase()) ||
-                              group.key.toLowerCase().includes(searchPermission.toLowerCase())
-                            )
-                          : PERMISSION_GROUPS
-                        ).map((group) => {
-                          const hasAll = hasAllPermissions(group.permissions);
+                        {filteredPermissionGroups.map((group) => {
+                          const visiblePermissions = group.permissions.filter((permission) =>
+                            assignablePermissions.has(permission)
+                          );
+                          const hasAll = hasAllPermissions(visiblePermissions);
                           
                           return (
                             <tr key={group.key} className="hover:bg-gray-50 transition-colors">
@@ -536,6 +573,9 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
                                 <span className="text-primary font-medium text-sm">{group.label}</span>
                               </td>
                               {group.permissions.map((permission) => {
+                                if (!assignablePermissions.has(permission)) {
+                                  return <td key={permission} className="px-2 py-3 text-center" />;
+                                }
                                 const checked = hasPermission(permission);
                                 return (
                                   <td key={permission} className="px-2 py-3 text-center">
@@ -557,7 +597,7 @@ export function CreateUserModal({ isOpen, onClose, onSuccess }: CreateUserModalP
                                   <input
                                     type="checkbox"
                                     checked={hasAll}
-                                    onChange={() => toggleAllPermissions(group.permissions)}
+                                    onChange={() => toggleAllPermissions(visiblePermissions)}
                                     className="rounded border-gray-300 text-primary focus:ring-primary focus:ring-2 h-4 w-4"
                                   />
                                 </label>

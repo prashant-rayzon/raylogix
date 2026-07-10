@@ -1,7 +1,7 @@
 import React from 'react';
-import { usePermission } from '../../lib/hooks/usePermission';
-import { useRole } from '../../lib/hooks/useRole';
-import type { UserRole } from '../../api/types';
+import { useAnyPermission, usePermission } from '@/lib/hooks/usePermission';
+import { useRole } from '@/lib/hooks/useRole';
+import type { UserRole } from '@/api/types';
 
 interface PermissionGateProps {
   /** Single permission to check */
@@ -68,9 +68,7 @@ export const PermissionGate: React.FC<PermissionGateProps> = ({
   children,
 }) => {
   const hasPermission = permission ? usePermission(permission) : true;
-  const hasAnyPermission = permissions
-    ? permissions.some((p) => usePermission(p))
-    : true;
+  const hasAnyPermission = permissions ? useAnyPermission(permissions) : true;
   const hasRole = role ? useRole(role) : true;
   const hasAnyRole = roles ? useRole(...roles) : true;
 

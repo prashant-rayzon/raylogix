@@ -89,7 +89,7 @@ export const fetchBids = createAsyncThunk(
     try {
       const res = await listBids({
         page: params.page || 1,
-        limit: params.limit || 20,
+        limit: params.limit || 10,
         status: params.status === 'all' ? undefined : (params.status as BidStatus),
         sortBy: params.sortBy || '-createdAt',
       })

@@ -40,7 +40,7 @@ export const auditService = {
     status?: string
     search?: string
   }): Promise<AuditLogResponse> {
-    const response = await apiClient.get('/audit', { params })
+    const response = await apiClient.get('/api/audit', { params })
     return response.data
   },
 }
