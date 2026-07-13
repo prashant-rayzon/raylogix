@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://raylogix.rayzonsolar.one/api/$1"
+    },
+    {
+      "source": "/uploads/(.*)",
+      "destination": "https://raylogix.rayzonsolar.one/uploads/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

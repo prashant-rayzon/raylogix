@@ -19,10 +19,17 @@ const isLocalHost = () => {
   )
 }
 
+const useSameOriginProxy = () => {
+  if (typeof window === 'undefined') return false
+
+  const hostname = window.location.hostname.toLowerCase()
+  return isLocalHost() || hostname.endsWith('.vercel.app')
+}
+
 export const getApiBaseUrl = () => {
   const configured = trimTrailingSlash(getConfiguredApiBase())
 
-  if (isLocalHost()) {
+  if (useSameOriginProxy()) {
     return ''
   }
 
@@ -33,7 +40,7 @@ export const getApiOrigin = () => stripApiSuffix(getApiBaseUrl())
 
 export const getSocketOrigin = () => {
   const configuredSocket = import.meta.env.VITE_SOCKET_URL
-  if (configuredSocket && !isLocalHost()) {
+  if (configuredSocket && !useSameOriginProxy()) {
     return stripApiSuffix(configuredSocket)
   }
 
