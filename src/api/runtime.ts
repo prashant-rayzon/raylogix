@@ -22,6 +22,9 @@ const isLocalHost = () => {
 const useSameOriginProxy = () => {
   if (typeof window === 'undefined') return false
 
+  const configured = trimTrailingSlash(getConfiguredApiBase())
+  if (configured) return false
+
   const hostname = window.location.hostname.toLowerCase()
   return isLocalHost() || hostname.endsWith('.vercel.app')
 }

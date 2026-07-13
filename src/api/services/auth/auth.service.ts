@@ -6,15 +6,17 @@ import type {
   MeResponse,
 } from '@/api/types'
 
+const AUTH_API_PREFIX = '/api/auth'
+
 export async function login(payload: LoginRequest): Promise<LoginResponse> {
-  const res = await api.post<LoginResponse>('/api/auth/login', payload)
+  const res = await api.post<LoginResponse>(`${AUTH_API_PREFIX}/login`, payload)
   return res.data
 }
 
 export async function refreshToken(
   refreshTokenValue: string
 ): Promise<RefreshResponse> {
-  const res = await api.post<RefreshResponse>('/api/auth/refresh-token', {
+  const res = await api.post<RefreshResponse>(`${AUTH_API_PREFIX}/refresh-token`, {
     refreshToken: refreshTokenValue,
   })
   return res.data
@@ -29,21 +31,21 @@ export type ActiveSession = {
 }
 
 export async function getMe(): Promise<MeResponse> {
-  const res = await api.get<MeResponse>('/api/auth/me')
+  const res = await api.get<MeResponse>(`${AUTH_API_PREFIX}/me`)
   return res.data
 }
 
 export async function getActiveSessions(): Promise<ActiveSession[]> {
-  const res = await api.get<{ success: boolean; data: ActiveSession[] }>('/api/auth/sessions')
+  const res = await api.get<{ success: boolean; data: ActiveSession[] }>(`${AUTH_API_PREFIX}/sessions`)
   return res.data.data || []
 }
 
 export async function revokeSession(sessionId: string): Promise<void> {
-  await api.delete(`/api/auth/sessions/${sessionId}`)
+  await api.delete(`${AUTH_API_PREFIX}/sessions/${sessionId}`)
 }
 
 export async function logoutAllSessions(): Promise<void> {
-  await api.post('/api/auth/logout-all')
+  await api.post(`${AUTH_API_PREFIX}/logout-all`)
 }
 
 export type ChangePasswordRequest = {

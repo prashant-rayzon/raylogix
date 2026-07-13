@@ -123,7 +123,7 @@ client.interceptors.response.use(
         }
 
         const response = await axios.post(
-          `${BASE_URL}/auth/refresh-token`,
+          `${BASE_URL}/api/auth/refresh-token`,
           { refreshToken },
           { headers }
         );
