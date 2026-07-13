@@ -1,6 +1,7 @@
 // socket/chatSocket.ts
 import io, { Socket } from 'socket.io-client';
 import { Message, Reaction } from '@/api/schema';
+import { getSocketOrigin } from '@/api/runtime';
 
 export class ChatSocket {
   private socket: Socket | null = null;
@@ -42,13 +43,7 @@ export class ChatSocket {
 
       this.isConnecting = true;
 
-      const SOCKET_URL = (
-        import.meta.env.VITE_SOCKET_URL ||
-        import.meta.env.VITE_API_URL ||
-        import.meta.env.VITE_API_BASE ||
-        import.meta.env.VITE_API_BASE_URL ||
-        'http://101.53.150.120:5000'
-      ).replace(/\/api\/?$/, '');
+      const SOCKET_URL = getSocketOrigin();
       console.log('🔌 Connecting to socket:', SOCKET_URL);
 
       this.socket = io(SOCKET_URL, {

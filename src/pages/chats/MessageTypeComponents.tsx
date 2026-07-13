@@ -13,8 +13,7 @@ import {
   ContactAttachment,
 } from './types';
 import { formatFileSize, getFileIcon } from './chatUtils';
-
-const API_ORIGIN = (import.meta.env.VITE_API_BASE || 'http://101.53.150.120:5000').replace(/\/api\/?$/, '');
+import { API_ORIGIN } from '@/api/origin';
 
 const getFileUrl = (url?: string) => {
   if (!url) return '';

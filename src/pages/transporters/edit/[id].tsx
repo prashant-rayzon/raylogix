@@ -19,6 +19,7 @@ import {
   Save,
 } from 'lucide-react';
 import { transportersService } from '@/api/services/transporters/transporters.service';
+import { API_ORIGIN } from '@/api/origin';
 
 interface EditTransporterModalProps {
   isOpen: boolean;
@@ -61,8 +62,6 @@ const emptyForm: FormData = {
   address: '',
   profilePicture: null,
 };
-
-const API_ORIGIN = (import.meta.env.VITE_API_BASE || 'http://101.53.150.120:5000').replace(/\/api\/?$/, '');
 
 const getImageUrl = (url?: string | null) => {
   if (!url) return null;

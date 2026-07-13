@@ -83,6 +83,7 @@ import { Progress } from '@/components/ui/progress'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { fetchVehicleLookup } from '@/features/vehicle-workflow/api'
 import { fastagService } from '@/api/services/tracking/fastag.service'
+import { API_ORIGIN } from '@/api/origin'
 import {
   VehicleWorkflowDraft,
   VehicleWorkflowPhoto,
@@ -205,10 +206,6 @@ interface MovementEvidenceState {
   gateIn: MovementEvidencePhoto[]
   gateOut: MovementEvidencePhoto[]
 }
-
-const API_ORIGIN = (
-  import.meta.env.VITE_API_BASE || 'http://101.53.150.120:5000'
-).replace(/\/api\/?$/, '')
 
 const resolvePhotoUrl = (url?: string) => {
   if (!url) return ''

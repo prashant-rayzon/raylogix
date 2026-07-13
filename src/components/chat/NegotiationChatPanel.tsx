@@ -33,8 +33,7 @@ import { formatMessageTime } from '@/pages/chats/chatUtils'
 import { useChat } from '@/pages/chats/hooks/useChat'
 import { deleteFile as deleteUploadedFile } from '@/api/services/chat/files.service'
 import { format as formatDate, isToday, isYesterday } from 'date-fns'
-
-const API_ORIGIN = (import.meta.env.VITE_API_BASE || 'http://101.53.150.120:5000').replace(/\/api\/?$/, '')
+import { API_ORIGIN } from '@/api/origin'
 const reactionOptions = [
   { emoji: '👍', label: 'Like' },
   { emoji: '❤️', label: 'Love' },

@@ -46,6 +46,7 @@ import { AttachmentRenderer } from './MessageTypeComponents';
 import { deleteFile as deleteUploadedFile } from '@/api/services/chat/files.service';
 import { updateConversationBlockStatus } from '@/api/services/chat/conversations.service';
 import { getAuthStore } from '@/lib/auth';
+import { API_ORIGIN } from '@/api/origin';
 
 // UI Components
 import { Separator } from '@/components/ui/separator';
@@ -95,7 +96,6 @@ interface EditingMessage {
   originalContent: string;
 }
 
-const API_ORIGIN = (import.meta.env.VITE_API_BASE || 'http://101.53.150.120:5000').replace(/\/api\/?$/, '');
 const PENDING_ATTACHMENT_TTL_MS = 10 * 60 * 1000;
 
 const getFileUrl = (url?: string) => {

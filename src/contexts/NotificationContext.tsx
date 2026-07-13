@@ -12,6 +12,7 @@ import {
 } from '@/api/services/notifications/notifications.service'
 import { io, Socket } from 'socket.io-client'
 import { useAppSelector } from '@/store'
+import { getSocketOrigin } from '@/api/runtime'
 
 /* ─────────────────────────── types ─────────────────────────── */
 
@@ -431,14 +432,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       return
     }
 
-    const env = (import.meta as any)?.env || {}
-    const serverUrl = (
-      env.VITE_SOCKET_URL ||
-      env.VITE_API_URL ||
-      env.VITE_API_BASE ||
-      env.VITE_API_BASE_URL ||
-      window.location.origin
-    ).replace(/\/api\/?$/, '')
+    const serverUrl = getSocketOrigin()
 
     const socket = io(serverUrl, {
       path: '/socket.io',

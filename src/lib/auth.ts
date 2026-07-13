@@ -1,4 +1,5 @@
 import type { AuthUser } from '@/api/types'
+import { API_ORIGIN } from '@/api/origin'
 
 const AUTH_STORE_KEY = 'auth'
 
@@ -35,7 +36,7 @@ export async function refreshAuthToken(): Promise<boolean> {
   if (!store.refreshToken) return false
 
   try {
-    const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) || ''
+    const base = API_ORIGIN
     const res = await fetch(`${base}/api/auth/refresh-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -54,7 +55,7 @@ export async function refreshAuthToken(): Promise<boolean> {
 export async function logoutApi(): Promise<void> {
   const store = getAuthStore()
   try {
-    const base = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE) || ''
+    const base = API_ORIGIN
     if (store.refreshToken) {
       await fetch(`${base}/api/auth/logout`, {
         method: 'POST',

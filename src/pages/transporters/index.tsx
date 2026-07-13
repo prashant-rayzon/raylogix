@@ -24,6 +24,7 @@ import { ViewLoadsModal } from './ViewLoadsModal';
 import { toast } from '@/components/ui/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { API_ORIGIN } from '@/api/origin';
 
 // Types
 interface Transporter {
@@ -67,8 +68,6 @@ interface Pagination {
   total: number;
   pages: number;
 }
-
-const API_ORIGIN = (import.meta.env.VITE_API_BASE || 'http://101.53.150.120:5000').replace(/\/api\/?$/, '');
 
 const getImageUrl = (url?: string) => {
   if (!url) return '';
